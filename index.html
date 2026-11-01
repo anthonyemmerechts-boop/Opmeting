@@ -1,0 +1,695 @@
+<!doctype html>
+<html lang="nl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#1A5FAD">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="description" content="Opmeting per positie op de tablet voor Ve.Ra+">
+<title>Ve.Ra+ Werfopmeting</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
+<style>:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}body{margin:0}img{max-width:100%}[hidden]{display:none!important}</style>
+</head>
+<body>
+<style>
+/* Layout: werkbalk bovenaan, één positie per scherm in stappen, grote tikvlakken (min. 52px) voor gebruik met één hand. */
+:root{
+  --bg:#EEF2F7; --panel:#FFFFFF; --ink:#152232; --muted:#5D6D80; --line:#C9D5E4;
+  --accent:#1A5FAD; --accent-ink:#FFFFFF; --accent-soft:#DCE8F7; --calc:#E3EFD8; --calc-ink:#2E5A16;
+  --warn:#B4531A; --ok:#2F7D3A;
+  --f-display:"Roboto Condensed","sans-serif-condensed","Arial Narrow",Arial,sans-serif;
+  --f-body:Roboto,system-ui,-apple-system,"Segoe UI",sans-serif;
+  --tap:52px; --r:10px;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#0F1720; --panel:#17222E; --ink:#E7EEF6; --muted:#97A7BA; --line:#2D3C4D;
+  --accent:#5B9BE8; --accent-ink:#0B1420; --accent-soft:#1E3550; --calc:#1F3320; --calc-ink:#A6D58A;
+  --warn:#F0A060; --ok:#7CCB86; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#0F1720; --panel:#17222E; --ink:#E7EEF6; --muted:#97A7BA; --line:#2D3C4D;
+  --accent:#5B9BE8; --accent-ink:#0B1420; --accent-soft:#1E3550; --calc:#1F3320; --calc-ink:#A6D58A;
+  --warn:#F0A060; --ok:#7CCB86; color-scheme:dark}
+*{box-sizing:border-box}
+html,body{height:100%}
+body{background:var(--bg);color:var(--ink);font-family:var(--f-body);font-size:16px;line-height:1.35;-webkit-tap-highlight-color:transparent}
+body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);z-index:10;background:var(--accent)}
+button,input,select,textarea{font:inherit;color:inherit}
+.bar{position:sticky;top:env(safe-area-inset-top,0px);z-index:5;background:var(--accent);color:var(--accent-ink);
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:8px;
+  display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+.brand{font-family:var(--f-display);font-weight:700;font-size:22px;letter-spacing:.01em;white-space:nowrap}
+.bar .werfname{font-family:var(--f-display);font-weight:600;font-size:17px;opacity:.92;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1}
+.bar button{background:transparent;border:1.5px solid color-mix(in srgb,var(--accent-ink) 55%,transparent);color:var(--accent-ink);
+  border-radius:8px;min-height:44px;padding:0 14px;font-weight:600;cursor:pointer}
+.bar button[aria-current="true"]{background:var(--accent-ink);color:var(--accent)}
+main{padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:14px 120px;max-width:1180px;margin:0 auto}
+h1,h2,h3{font-family:var(--f-display);text-wrap:balance;margin:0}
+h2{font-size:22px;font-weight:700}
+h3{font-size:13px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);font-weight:700;margin-bottom:8px}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);padding:16px}
+.grid{display:grid;gap:14px}
+.cols-2{grid-template-columns:repeat(auto-fit,minmax(min(100%,360px),1fr))}
+.cols-3{grid-template-columns:repeat(auto-fit,minmax(min(100%,260px),1fr))}
+.stack{display:flex;flex-direction:column;gap:14px}
+.row{display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end}
+label.f{display:flex;flex-direction:column;gap:4px;font-size:12px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);min-width:0;flex:1}
+input.t,select.t,textarea.t{min-height:var(--tap);border:1.5px solid var(--line);border-radius:8px;background:var(--panel);padding:8px 12px;font-size:18px;
+  text-transform:none;letter-spacing:0;font-weight:500;width:100%;min-width:0}
+textarea.t{min-height:140px;resize:vertical;line-height:1.4}
+input.t:focus,select.t:focus,textarea.t:focus,button:focus-visible{outline:3px solid var(--accent);outline-offset:1px;border-color:var(--accent)}
+.num{font-variant-numeric:tabular-nums;text-align:center;font-size:22px;font-weight:600}
+/* positie-strook */
+.posstrip{display:flex;gap:8px;overflow-x:auto;padding:2px 2px 10px;margin-bottom:6px}
+.chip{flex:0 0 auto;min-height:var(--tap);min-width:64px;padding:0 14px;border-radius:999px;border:1.5px solid var(--line);background:var(--panel);
+  font-family:var(--f-display);font-weight:700;font-size:18px;cursor:pointer;display:flex;align-items:center;gap:6px}
+.chip[aria-current="true"]{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
+.chip .dot{width:9px;height:9px;border-radius:50%;background:var(--line)}
+.chip .dot.done{background:var(--ok)}
+.chip.add{border-style:dashed;color:var(--accent)}
+/* stappen */
+.steps{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-bottom:14px}
+.steps button{min-height:var(--tap);border:1.5px solid var(--line);background:var(--panel);border-radius:8px;font-family:var(--f-display);
+  font-weight:700;font-size:17px;cursor:pointer;padding:0 6px}
+.steps button[aria-current="true"]{border-color:var(--accent);background:var(--accent-soft);color:var(--accent)}
+.steps small{display:block;font-family:var(--f-body);font-weight:500;font-size:11px;color:var(--muted)}
+/* maten */
+.mgrid{display:grid;grid-template-columns:44px 1fr 1fr;grid-template-rows:auto repeat(3,auto) auto;gap:8px 10px;align-items:center}
+.mgrid .hd{font-size:12px;font-weight:700;letter-spacing:.08em;color:var(--muted);text-align:center}
+.mgrid .lbl{font-family:var(--f-display);font-weight:700;font-size:22px;grid-row:2 / span 3}
+.mcol{display:grid;gap:8px}
+.calc{background:var(--calc);color:var(--calc-ink);border-radius:8px;min-height:40px;display:flex;align-items:center;justify-content:center;
+  font-variant-numeric:tabular-nums;font-weight:700;font-size:18px}
+.calc small{font-weight:500;font-size:11px;margin-right:6px;opacity:.8;text-transform:uppercase;letter-spacing:.06em}
+.pm{display:grid;grid-template-columns:1fr auto 1fr;gap:10px;align-items:center}
+.pm input{font-size:30px;min-height:64px;border-width:2px;border-color:var(--accent)}
+.pm .x{font-family:var(--f-display);font-weight:700;font-size:26px;color:var(--accent)}
+.quick{display:flex;gap:8px;flex-wrap:wrap}
+.quick button,.btn{min-height:44px;border-radius:8px;border:1.5px solid var(--line);background:var(--panel);padding:0 14px;font-weight:600;cursor:pointer}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.btn.danger{color:var(--warn);border-color:color-mix(in srgb,var(--warn) 50%,var(--line))}
+/* keuzetegels */
+.seg{display:flex;flex-wrap:wrap;gap:8px}
+.seg button{min-height:var(--tap);min-width:var(--tap);padding:0 16px;border-radius:8px;border:1.5px solid var(--line);background:var(--panel);
+  font-weight:600;font-size:16px;cursor:pointer}
+.seg button[aria-pressed="true"]{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.pkt{display:grid;grid-template-columns:34px 1fr;gap:8px 10px;align-items:center}
+.pkt b{font-family:var(--f-display);font-size:22px}
+.door{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
+.door button{border:1.5px solid var(--line);background:var(--panel);border-radius:10px;padding:8px 4px 6px;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:2px;font-weight:600;font-size:14px}
+.door button[aria-pressed="true"]{border-color:var(--accent);background:var(--accent-soft);color:var(--accent)}
+.door svg{width:100%;max-width:84px;height:auto}
+.door svg .wall{stroke:var(--ink);stroke-width:5}
+.door svg .leaf{stroke:currentColor;stroke-width:3.5}
+.door svg .arc{stroke:currentColor;stroke-width:1.5;stroke-dasharray:4 4;fill:none}
+.door svg text{fill:var(--muted);font-size:10px;font-family:var(--f-body)}
+.lens{display:grid;gap:8px}
+.lens .l{display:grid;grid-template-columns:auto 1fr auto;gap:10px;align-items:center;min-height:var(--tap);border:1.5px solid var(--line);border-radius:8px;padding:0 12px;cursor:pointer;background:var(--panel)}
+.lens .l[aria-pressed="true"]{border-color:var(--accent)}
+.lens .box{width:26px;height:26px;border:2px solid var(--muted);border-radius:6px;display:grid;place-items:center;font-weight:800;color:var(--accent-ink)}
+.lens .l[aria-pressed="true"] .box{background:var(--accent);border-color:var(--accent)}
+.lens .v{font-variant-numeric:tabular-nums;font-weight:700;font-size:18px;color:var(--calc-ink);background:var(--calc);border-radius:6px;padding:4px 10px;min-width:84px;text-align:center}
+/* foto's */
+.photos{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:10px}
+.photo{position:relative;border-radius:8px;overflow:hidden;border:1px solid var(--line);aspect-ratio:4/3;background:var(--bg);max-width:100%}
+.photo img{width:100%;height:100%;object-fit:cover;display:block}
+.photo button{position:absolute;top:6px;right:6px;width:40px;height:40px;border-radius:50%;border:0;background:rgba(0,0,0,.6);color:#fff;font-size:20px;cursor:pointer}
+.addphoto{display:flex;align-items:center;justify-content:center;flex-direction:column;gap:4px;border:2px dashed var(--accent);color:var(--accent);
+  border-radius:8px;aspect-ratio:4/3;font-weight:700;cursor:pointer;background:var(--accent-soft);text-align:center;padding:8px}
+.addphoto input{position:absolute;width:1px;height:1px;opacity:0}
+/* onderbalk */
+.foot{position:fixed;left:0;right:0;bottom:0;z-index:5;background:var(--panel);border-top:1px solid var(--line);
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));
+  padding-top:10px;padding-bottom:calc(10px + env(safe-area-inset-bottom,0px));display:flex;gap:10px;align-items:center}
+.foot .btn{min-height:var(--tap);font-size:17px;flex:1;max-width:260px}
+.foot .mid{flex:1;text-align:center;color:var(--muted);font-size:14px;min-width:0}
+.ex{display:inline-block;background:var(--accent-soft);color:var(--accent);font-size:12px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;padding:3px 8px;border-radius:6px}
+table.ov{width:100%;border-collapse:collapse;font-variant-numeric:tabular-nums}
+table.ov th{font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);text-align:left;padding:8px;border-bottom:1.5px solid var(--line)}
+table.ov td{padding:10px 8px;border-bottom:1px solid var(--line)}
+table.ov tr{cursor:pointer}
+.scroll{overflow-x:auto}
+.state{display:inline-flex;align-items:center;gap:6px;font-weight:600}
+.state i{width:10px;height:10px;border-radius:50%;background:var(--line)}
+.state.done i{background:var(--ok)}
+.toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(88px + env(safe-area-inset-bottom,0px));background:var(--ink);color:var(--bg);
+  padding:10px 16px;border-radius:8px;font-weight:600;z-index:20;max-width:calc(100% - 32px)}
+.muted{color:var(--muted)}
+.werflist{display:grid;gap:10px}
+.werfitem{display:flex;justify-content:space-between;align-items:center;gap:12px;min-height:64px;padding:10px 14px;border:1.5px solid var(--line);border-radius:10px;background:var(--panel);cursor:pointer;text-align:left;width:100%}
+.werfitem b{font-family:var(--f-display);font-size:20px}
+@media (max-width:560px){.steps{grid-template-columns:repeat(2,1fr)}.door{grid-template-columns:repeat(2,1fr)}}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+
+<header class="bar">
+  <span class="brand">Ve.Ra +</span>
+  <span class="werfname" id="werfname">Werfopmeting</span>
+  <button type="button" id="nav-werven">Werven</button>
+  <button type="button" id="nav-werf">Werf</button>
+  <button type="button" id="nav-pos">Posities</button>
+  <button type="button" id="nav-ov">Overzicht</button>
+</header>
+<main id="app"></main>
+<div class="foot" id="foot" hidden></div>
+<div class="toast" id="toast" hidden></div>
+
+<script>
+(function(){
+"use strict";
+/* ---------- opslag (IndexedDB, met geheugen als terugval) ---------- */
+const mem = {};
+let dbp = null;
+function idb(){
+  if (dbp) return dbp;
+  dbp = new Promise(res=>{
+    try{
+      const r = indexedDB.open("vera-werfopmeting",1);
+      r.onupgradeneeded = ()=>{ r.result.createObjectStore("kv"); };
+      r.onsuccess = ()=>res(r.result); r.onerror = ()=>res(null);
+    }catch(e){ res(null); }
+  });
+  return dbp;
+}
+async function put(k,v){ mem[k]=v; const d=await idb(); if(!d) return; try{ d.transaction("kv","readwrite").objectStore("kv").put(v,k);}catch(e){} }
+async function get(k){ const d=await idb(); if(!d) return mem[k]; return new Promise(res=>{ try{ const q=d.transaction("kv").objectStore("kv").get(k); q.onsuccess=()=>res(q.result); q.onerror=()=>res(mem[k]); }catch(e){res(mem[k]);} }); }
+async function del(k){ delete mem[k]; const d=await idb(); if(!d) return; try{ d.transaction("kv","readwrite").objectStore("kv").delete(k);}catch(e){} }
+
+/* ---------- model ---------- */
+const uid = ()=>Math.random().toString(36).slice(2,10);
+const blank3 = ()=>["","",""];
+function newPos(kind,nr){
+  return {id:uid(),nr:String(nr||""),kind,plaats:"",type:"",verdieping:"",gevel:"",offB:"",offH:"",bijkomend:false,
+    dm:{b:blank3(),h:blank3()},bm:{b:blank3(),h:blank3()},bi:"",bu:"",bibuM:"",a:"",d:"",hneq:"",
+    P:[],K:[],T:[],pmB:"",pmH:"",vp:"",krukH:"",vd:"",vloerAf:false,
+    dorpel:"",kruk:"",scharnieren:"",soudage:false,infoprod:"",opties:"",verbrL:"",verbrR:"",acc:[],
+    draai:"",slot:"",cilinder:"",paneel:"",
+    binnen:"",binnenBr:"",tablet:"",tabletMaat:"",buitendorpel:"",bdD:"",
+    rlType:"",rlB:"",rlH:"",rlBed:"",rlZijde:"",notes:"",photos:[],done:false};
+}
+function newWerf(){
+  return {id:uid(),klant:"",offerte:"",adres:"",tel:"",datum:new Date().toISOString().slice(0,10),
+    systeem:"Deceuninck Elegant 76",kleurBu:"",kleurBi:"",beslag:"",glas:"",
+    check:[],posities:[newPos("raam",1)],updated:Date.now()};
+}
+function exampleWerf(){
+  const w = newWerf(); w.example=true; w.klant="Voorbeeldwerf"; w.offerte="VOORBEELD"; w.adres="Stationsstraat 1, Aalst";
+  w.kleurBu="Grafietzwart"; w.kleurBi="Crème";
+  const p1 = newPos("raam",1); Object.assign(p1,{plaats:"Living",type:"Vast + draaikip",verdieping:"0",gevel:"Voor",offB:"2150",offH:"1500",
+    dm:{b:["2141,6","2138,2","2143,0"],h:["1469,3","1471,0",""]},bm:{b:["2162,4","",""],h:["1427,4","",""]},
+    pmB:"2150",pmH:"1500",dorpel:"5183 (74)",kruk:"Victory 9004",scharnieren:"Verdekt",soudage:true,infoprod:"Ja",
+    binnen:"Chambrant",binnenBr:"70",tablet:"PVC wit",rlType:"Rolluik",acc:["dorpel","inloop","verst"],
+    notes:"Tegels onder vensterbank wegnemen. Klant wil kruk zo laag mogelijk.",done:true});
+  const p2 = newPos("deur",2); Object.assign(p2,{plaats:"Inkomhal",type:"Enkel binnendraaiend",verdieping:"0",gevel:"Voor",offB:"1100",offH:"2100",
+    dm:{b:["1100","1098,5",""],h:["2100","",""]},bm:{b:["1116","",""],h:["2114","",""]},pmB:"1140",pmH:"2110",draai:"binnen L",slot:"5-punt",vd:"0"});
+  const p3 = newPos("raam",3); Object.assign(p3,{plaats:"Badkamer",type:"Draaikip - 1 vleugel",verdieping:"1",gevel:"Zij R",offB:"700",offH:"800"});
+  w.posities=[p1,p2,p3];
+  return w;
+}
+
+/* ---------- toestand ---------- */
+let index = [];            // [{id,klant,offerte,updated,example}]
+let werf = null;
+let curPos = 0, step = "maten", view = "werven";
+let saveT = null;
+function scheduleSave(){
+  if(!werf) return;
+  werf.updated = Date.now();
+  clearTimeout(saveT);
+  saveT = setTimeout(async ()=>{
+    await put("werf:"+werf.id, werf);
+    const i = index.findIndex(x=>x.id===werf.id);
+    const meta = {id:werf.id,klant:werf.klant,offerte:werf.offerte,updated:werf.updated,example:!!werf.example,n:werf.posities.length};
+    if(i<0) index.unshift(meta); else index[i]=meta;
+    await put("index",index);
+    put("last",{werf:werf.id,pos:curPos,step,view});
+  },350);
+}
+
+/* ---------- helpers ---------- */
+const $ = s=>document.querySelector(s);
+const esc = s=>String(s==null?"":s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const num = v=>{ const s=String(v==null?"":v).replace(",",".").trim(); if(s==="") return NaN; return parseFloat(s); };
+function minOf(arr){ const v=arr.map(num).filter(x=>!isNaN(x)); return v.length?Math.floor(Math.min(...v)):""; }
+function lens(p){
+  const B=num(p.pmB), H=num(p.pmH); const ok=x=>!isNaN(x);
+  const vl=num(p.verbrL)||0, vr=num(p.verbrR)||0;
+  if(p.kind==="deur") return [["dorpel","Dorpel / strip",ok(B)?Math.round(B):""],["koppel","Koppelprofiel",ok(H)?Math.round(H):""]];
+  return [["dorpel","Buitendorpel",ok(B)?Math.round(B-vl-vr):""],["inloop","Inloopstuk (PM − 80)",ok(B)?Math.round(B-80):""],
+    ["verst","Versterking (PM − 120)",ok(B)?Math.round(B-120):""],["dagkant","Dagkant 2× H + 1× B",ok(B)&&ok(H)?`${Math.round(H)} / ${Math.round(B)}`:""]];
+}
+function getPath(o,path){ return path.split(".").reduce((a,k)=>a==null?a:a[k],o); }
+function setPath(o,path,v){ const ks=path.split("."); const last=ks.pop(); const t=ks.reduce((a,k)=>a[k],o); t[last]=v; }
+function toast(msg){ const t=$("#toast"); t.textContent=msg; t.hidden=false; clearTimeout(toast._t); toast._t=setTimeout(()=>t.hidden=true,2600); }
+function P(){ return werf.posities[curPos]; }
+
+/* ---------- weergaven ---------- */
+function render(){
+  document.querySelectorAll(".bar button").forEach(b=>b.setAttribute("aria-current","false"));
+  const nb = {werven:"#nav-werven",werf:"#nav-werf",pos:"#nav-pos",ov:"#nav-ov"}[view]; if(nb) $(nb).setAttribute("aria-current","true");
+  ["#nav-werf","#nav-pos","#nav-ov"].forEach(s=>$(s).hidden=!werf);
+  $("#werfname").textContent = werf ? (werf.klant||"Nieuwe werf")+(werf.offerte?" · "+werf.offerte:"") : "Werfopmeting";
+  const app=$("#app");
+  if(view==="werven") app.innerHTML=vWerven();
+  else if(view==="werf") app.innerHTML=vWerf();
+  else if(view==="ov") app.innerHTML=vOverzicht();
+  else app.innerHTML=vPos();
+  renderFoot();
+  if(view==="pos") { updateCalc(); loadPhotos(); }
+  put("last",{werf:werf&&werf.id,pos:curPos,step,view});
+}
+
+function vWerven(){
+  const items = index.slice().sort((a,b)=>b.updated-a.updated).map(w=>`
+    <button class="werfitem" type="button" data-open="${w.id}">
+      <span><b>${esc(w.klant||"Nieuwe werf")}</b> ${w.example?'<span class="ex">voorbeeld</span>':""}<br>
+      <span class="muted">${esc(w.offerte||"geen offerte")} · ${w.n||0} posities · ${new Date(w.updated).toLocaleDateString("nl-BE")}</span></span>
+      <span class="muted">Openen ›</span>
+    </button>`).join("");
+  return `<div class="stack">
+    <div class="row" style="justify-content:space-between;align-items:center"><h2>Werven op deze tablet</h2>
+      <button class="btn primary" type="button" id="newwerf">+ Nieuwe werf</button></div>
+    <div class="werflist">${items||'<p class="muted">Nog geen werven. Start een nieuwe werf.</p>'}</div>
+    <div class="panel"><h3>Zo werkt het</h3>
+      <p style="margin:0;max-width:65ch">Alles wordt op deze tablet bewaard, ook zonder bereik. Meet per positie eerst 3× breedte en dan 3× hoogte: met de DISTO in toetsenbordmodus springt elk volgend getal naar het juiste vak. Maak onder <b>Overzicht</b> een PDF voor productie en klant, of een reservekopie. Bestanden komen in de map Downloads.</p></div>
+    <div class="row"><button class="btn" type="button" id="importbtn">Reservekopie terugzetten</button>
+      <input type="file" id="importfile" accept=".json,application/json" hidden></div>
+  </div>`;
+}
+
+function vWerf(){
+  const f=(lab,k,attrs="")=>`<label class="f">${lab}<input class="t" data-w="${k}" value="${esc(werf[k])}" ${attrs}></label>`;
+  const checks=[["toegang","Parking / toegang ok"],["stelling","Stelling of hoogwerker nodig"],["stroom","Stroom voor motoren / screens"],["vrij","Tegels / meubels vrij te maken"],["asbest","Vermoeden asbest"]];
+  return `<div class="stack">
+  ${werf.example?'<p><span class="ex">voorbeeld</span> <span class="muted">Dit is voorbeelddata. Maak een nieuwe werf voor je eigen opmeting.</span></p>':""}
+  <div class="panel grid cols-2">
+    <div class="stack">${f("Klant","klant")}${f("Offerte","offerte")}${f("Adres werf","adres")}</div>
+    <div class="stack">${f("Telefoon","tel",'inputmode="tel"')}${f("Datum opmeting","datum",'type="date"')}</div>
+  </div>
+  <div class="grid cols-2">
+    <div class="panel stack"><h3>Algemeen volgens offerte</h3>${f("Systeem","systeem")}${f("Kleur buiten","kleurBu")}${f("Kleur binnen","kleurBi")}${f("Beslag","beslag")}${f("Glas","glas")}</div>
+    <div class="panel"><h3>Werfcheck</h3><div class="lens">${checks.map(([k,l])=>`<div class="l" role="button" tabindex="0" data-check="${k}" aria-pressed="${werf.check.includes(k)}"><span class="box">✓</span><span>${l}</span><span></span></div>`).join("")}</div></div>
+  </div>
+  <div class="row"><button class="btn danger" type="button" id="delwerf">Werf verwijderen</button><span class="muted" id="delconfirm"></span></div>
+  </div>`;
+}
+
+function seg(path,opts,cur){
+  return `<div class="seg">${opts.map(o=>`<button type="button" data-seg="${path}" data-val="${esc(o)}" aria-pressed="${cur===o}">${esc(o)}</button>`).join("")}</div>`;
+}
+function inp(path,val,attrs="",cls="t"){ return `<input class="${cls}" data-p="${path}" value="${esc(val)}" ${attrs}>`; }
+
+function vPos(){
+  const p=P();
+  const strip = werf.posities.map((x,i)=>`<button type="button" class="chip" data-pos="${i}" aria-current="${i===curPos}"><span class="dot ${x.done?"done":""}"></span>${esc(x.nr||i+1)}${x.kind==="deur"?" D":""}</button>`).join("")
+    + `<button type="button" class="chip add" data-addpos="raam">+ raam</button><button type="button" class="chip add" data-addpos="deur">+ deur</button>`;
+  const stepsDef=[["maten","Maten","DM · BM · PM"],["uitv",p.kind==="deur"?"Deur":"Uitvoering",p.kind==="deur"?"draairichting · slot":"dorpel · kruk"],["afw","Afwerking","binnen · rolluik"],["foto","Foto's & nota","bestaande toestand"]];
+  const steps = `<div class="steps">${stepsDef.map(([k,l,s])=>`<button type="button" data-step="${k}" aria-current="${step===k}">${l}<small>${s}</small></button>`).join("")}</div>`;
+  const head = `<div class="panel grid" style="grid-template-columns:repeat(auto-fit,minmax(min(100%,130px),1fr));margin-bottom:14px">
+    <label class="f">Positie${inp("nr",p.nr,'inputmode="numeric"',"t num")}</label>
+    <label class="f" style="grid-column:span 2">Plaats${inp("plaats",p.plaats,'list="dl-plaats"')}</label>
+    <label class="f" style="grid-column:span 2">Type${inp("type",p.type,`list="dl-type-${p.kind}"`)}</label>
+    <label class="f">Verdieping${inp("verdieping",p.verdieping,'list="dl-verd"')}</label>
+    <label class="f">Gevel${inp("gevel",p.gevel,'list="dl-gevel"')}</label>
+  </div>
+  <datalist id="dl-plaats">${["Living","Keuken","Inkomhal","Badkamer","Slaapkamer 1","Slaapkamer 2","Bureel","Zolder","Garage","WC","Dressing"].map(x=>`<option value="${x}">`).join("")}</datalist>
+  <datalist id="dl-type-raam">${["Draaikip - 1 vleugel","Draaikip - 2 vleugels","Vast raam","Valraam","Vast + draaikip","Vast + draaikip + vast","Schuifraam","Hefschuifdeur"].map(x=>`<option value="${x}">`).join("")}</datalist>
+  <datalist id="dl-type-deur">${["Enkel binnendraaiend","Enkel buitendraaiend","Dubbel binnendraaiend","Voordeur + zijlicht(en)"].map(x=>`<option value="${x}">`).join("")}</datalist>
+  <datalist id="dl-verd">${["Kelder","0","1","2","3","Zolder"].map(x=>`<option value="${x}">`).join("")}</datalist>
+  <datalist id="dl-gevel">${["Voor","Achter","Zij L","Zij R"].map(x=>`<option value="${x}">`).join("")}</datalist>`;
+  let body="";
+  if(step==="maten") body=sMaten(p); else if(step==="uitv") body=sUitv(p); else if(step==="afw") body=sAfw(p); else body=sFoto(p);
+  return `<div class="posstrip">${strip}</div>${steps}${head}${body}`;
+}
+
+function mBlock(key,p){
+  const col=(dim,lab)=>`<div class="mcol">${[0,1,2].map(i=>inp(`${key}.${dim}.${i}`,p[key][dim][i],`inputmode="decimal" enterkeyhint="next" data-m aria-label="${key.toUpperCase()} ${lab} ${i+1}"`,"t num")).join("")}
+     <div class="calc" data-calc="${key}.${dim}"><small>kleinste</small><span></span></div></div>`;
+  return `<div class="mgrid"><span></span><span class="hd">BREEDTE</span><span class="hd">HOOGTE</span>
+    <span class="lbl">${key.toUpperCase()}</span>${col("b","breedte")}${col("h","hoogte")}</div>`;
+}
+function sMaten(p){
+  const pkt = p.kind==="raam" ? `<div class="panel"><h3>P / K / T</h3><div class="pkt">
+      ${[["P","LRBO"],["K",["L","R","B","O","TR"]],["T","LRBO"]].map(([g,o])=>`<b>${g}</b><div class="seg">${[...o].length&&(Array.isArray(o)?o:o.split("")).map(x=>`<button type="button" data-multi="${g}" data-val="${x}" aria-pressed="${p[g].includes(x)}">${x}</button>`).join("")}</div>`).join("")}
+    </div></div>`
+    : `<div class="panel grid" style="grid-template-columns:repeat(auto-fit,minmax(min(100%,150px),1fr))"><h3 style="grid-column:1/-1;margin:0">Deur</h3>
+      <label class="f">VD / vloerpas${inp("vd",p.vd,'inputmode="decimal"',"t num")}</label>
+      <label class="f">Krukhoogte${inp("krukH",p.krukH,'inputmode="decimal"',"t num")}</label>
+      <div class="f">Vloer afgewerkt ${seg("vloerAf",["Ja","Nee"],p.vloerAf===true?"Ja":p.vloerAf==="nee"?"Nee":"")}</div></div>`;
+  return `<div class="grid cols-2">
+    <div class="stack">
+      <div class="panel">${mBlock("dm",p)}</div>
+      <div class="panel">${mBlock("bm",p)}</div>
+    </div>
+    <div class="stack">
+      <div class="panel stack"><h3>PM · bestelmaat</h3>
+        <div class="pm">${inp("pmB",p.pmB,'inputmode="decimal" aria-label="PM breedte"',"t num")}<span class="x">×</span>${inp("pmH",p.pmH,'inputmode="decimal" aria-label="PM hoogte"',"t num")}</div>
+        <div class="quick"><button type="button" data-take="dm">= kleinste DM</button><button type="button" data-take="bm">= kleinste BM</button>
+          <span class="muted" style="align-self:center">Offerte: ${esc(p.offB||"–")} × ${esc(p.offH||"–")}</span></div>
+      </div>
+      <div class="panel grid" style="grid-template-columns:repeat(3,minmax(0,1fr))">
+        <h3 style="grid-column:1/-1;margin:0">BIBU · A · D · H≠</h3>
+        <label class="f">Bi${inp("bi",p.bi,'inputmode="decimal"',"t num")}</label>
+        <label class="f">Bu${inp("bu",p.bu,'inputmode="decimal"',"t num")}</label>
+        <label class="f">/M${inp("bibuM",p.bibuM,'inputmode="decimal"',"t num")}</label>
+        <label class="f">A${inp("a",p.a,'inputmode="decimal"',"t num")}</label>
+        <label class="f">D${inp("d",p.d,'inputmode="decimal"',"t num")}</label>
+        <label class="f">H≠${inp("hneq",p.hneq,'inputmode="decimal"',"t num")}</label>
+      </div>
+      ${pkt}
+      ${p.kind==="raam"?`<div class="panel grid" style="grid-template-columns:repeat(2,minmax(0,1fr))"><label class="f">vp${inp("vp",p.vp,'inputmode="decimal"',"t num")}</label><label class="f">Krukhoogte${inp("krukH",p.krukH,'inputmode="decimal"',"t num")}</label></div>`:""}
+    </div></div>`;
+}
+function doorSvg(inward,left){
+  const y=46, x0=26, x1=58, r=32, hx=left?x0:x1, s=inward?1:-1;
+  const ex=left?x1:x0, ly=y+s*r;
+  const sweep = (left?1:0) ^ (inward?0:1);
+  return `<svg viewBox="0 0 84 92" aria-hidden="true"><text x="2" y="10">buiten</text><text x="2" y="90">binnen</text>
+    <line class="wall" x1="0" y1="${y}" x2="${x0}" y2="${y}"/><line class="wall" x1="${x1}" y1="${y}" x2="84" y2="${y}"/>
+    <line class="leaf" x1="${hx}" y1="${y}" x2="${hx}" y2="${ly}"/>
+    <path class="arc" d="M ${hx} ${ly} A ${r} ${r} 0 0 ${sweep} ${ex} ${y}"/></svg>`;
+}
+function sUitv(p){
+  if(p.kind==="deur"){
+    const opts=[["binnen L",1,1],["binnen R",1,0],["buiten L",0,1],["buiten R",0,0]];
+    return `<div class="grid cols-2">
+      <div class="panel stack"><h3>Draairichting · binnenzicht</h3>
+        <div class="door">${opts.map(([l,i,lf])=>`<button type="button" data-seg="draai" data-val="${l}" aria-pressed="${p.draai===l}">${doorSvg(i,lf)}${l}</button>`).join("")}</div>
+        <h3>Slot</h3>${seg("slot",["5-punt","Cremone auto","Elektrisch","Andere"],p.slot)}
+        <div class="seg"><button type="button" data-toggle="uitlijnen" aria-pressed="${!!p.uitlijnen}">Uitlijnen naar cilinder</button><button type="button" data-toggle="soudage" aria-pressed="${!!p.soudage}">Soudage inviline</button></div>
+      </div>
+      <div class="stack">
+        <div class="panel stack"><h3>Dorpel</h3>${seg("dorpel",["Alu deurdorpel","Vlakke dorpel","EPDM","Geen"],p.dorpel)}
+          <label class="f">Paneel${inp("paneel",p.paneel)}</label><label class="f">Cilinder${inp("cilinder",p.cilinder)}</label></div>
+        ${lensPanel(p)}
+      </div></div>`;
+  }
+  return `<div class="grid cols-2">
+    <div class="panel stack"><h3>Dorpel</h3>${seg("dorpel",["5412 (20)","5183 (74)","110.079","110.126","U645","EPDM","Geen"],p.dorpel)}
+      <h3>Kruk</h3>${seg("kruk",["Standaard","Victory 9004","Afsluitbaar 9004","Andere"],p.kruk)}
+      <h3>Scharnieren</h3>${seg("scharnieren",["Verdekt","Zichtbaar"],p.scharnieren)}
+      <h3>Info prod</h3>${seg("infoprod",["Ja","Nee"],p.infoprod)}
+      <div class="seg"><button type="button" data-toggle="soudage" aria-pressed="${!!p.soudage}">Soudage inviline</button></div>
+    </div>
+    <div class="stack">${lensPanel(p)}
+      <div class="panel"><label class="f">Opties / vullingen${`<textarea class="t" data-p="opties" rows="3">${esc(p.opties)}</textarea>`}</label></div>
+    </div></div>`;
+}
+function lensPanel(p){
+  const verbr = p.kind==="raam" ? `<div class="grid" style="grid-template-columns:repeat(2,minmax(0,1fr))"><label class="f">Verbreding links${inp("verbrL",p.verbrL,'inputmode="decimal"',"t num")}</label><label class="f">Verbreding rechts${inp("verbrR",p.verbrR,'inputmode="decimal"',"t num")}</label></div>`:"";
+  return `<div class="panel stack"><h3>Bestellengtes · uit PM</h3>${verbr}
+    <div class="lens" id="lens">${lens(p).map(([k,l])=>`<div class="l" role="button" tabindex="0" data-acc="${k}" aria-pressed="${p.acc.includes(k)}"><span class="box">✓</span><span>${l}</span><span class="v" data-len="${k}"></span></div>`).join("")}</div>
+    <p class="muted" style="margin:0;font-size:13px">Tik aan wat besteld moet worden. Lengtes passen zich aan als de PM wijzigt.</p></div>`;
+}
+function sAfw(p){
+  return `<div class="grid cols-2">
+    <div class="panel stack"><h3>Binnenafwerking</h3>${seg("binnen",["Chambrant","PVC afkasting","Geen / PUR","Pleister"],p.binnen)}
+      <label class="f">Breedte (mm)${inp("binnenBr",p.binnenBr,'inputmode="decimal"',"t num")}</label>
+      <h3>Tablet</h3>${seg("tablet",["PVC wit","PVC blauwsteen","Natuursteen","Bestaand","Geen"],p.tablet)}
+      <label class="f">Dikte × diepte × lengte${inp("tabletMaat",p.tabletMaat,'inputmode="text" placeholder="20 x 160 x 1770"')}</label>
+      <h3>Buitendorpel</h3>${seg("buitendorpel",["Alu plooidorpel","Arduin","Bestaand","Geen"],p.buitendorpel)}
+      <label class="f">Diepte D (mm)${inp("bdD",p.bdD,'inputmode="decimal"',"t num")}</label>
+    </div>
+    <div class="panel stack"><h3>Rolluik / screen · GLR</h3>${seg("rlType",["Geen","Rolluik","Zip screen","Knikarmscherm","Bestaand"],p.rlType)}
+      <div class="grid" style="grid-template-columns:repeat(2,minmax(0,1fr))"><label class="f">Breedte${inp("rlB",p.rlB,'inputmode="decimal"',"t num")}</label><label class="f">Hoogte${inp("rlH",p.rlH,'inputmode="decimal"',"t num")}</label></div>
+      <h3>Bediening</h3>${seg("rlBed",["Motor","Solar","Lint","Stang"],p.rlBed)}
+      <h3>Bedieningszijde</h3>${seg("rlZijde",["Links","Rechts"],p.rlZijde)}
+    </div></div>`;
+}
+function sFoto(p){
+  return `<div class="grid cols-2">
+    <div class="panel stack"><h3>Foto's bestaande toestand</h3>
+      <div class="photos" id="photos">
+        <label class="addphoto" style="position:relative"><span style="font-size:30px;line-height:1">+</span><span>Foto toevoegen</span><input type="file" accept="image/*" capture="environment" multiple id="photoin"></label>
+      </div></div>
+    <div class="panel stack"><h3>Opmerkingen</h3>
+      <textarea class="t" data-p="notes" rows="8" placeholder="Bv. tegels wegnemen, kruk zo laag mogelijk, PAC 80 mm">${esc(p.notes)}</textarea>
+      <div class="seg"><button type="button" data-toggle="bijkomend" aria-pressed="${!!p.bijkomend}">Bijkomende positie</button>
+        <button type="button" data-toggle="done" aria-pressed="${!!p.done}">Positie klaar</button></div>
+      <div class="row"><button class="btn danger" type="button" id="delpos">Positie verwijderen</button><span class="muted" id="delposc"></span></div>
+    </div></div>`;
+}
+
+function vOverzicht(){
+  const rows = werf.posities.map((p,i)=>`<tr data-gopos="${i}"><td><b>${esc(p.nr||i+1)}</b></td><td>${esc(p.plaats)}</td><td>${esc(p.type||p.kind)}</td>
+    <td>${p.pmB||p.pmH?esc(p.pmB)+" × "+esc(p.pmH):'<span class="muted">nog geen PM</span>'}</td><td>${esc(p.dorpel)}</td><td>${p.photos.length}</td>
+    <td><span class="state ${p.done?"done":""}"><i></i>${p.done?"klaar":"open"}</span></td></tr>`).join("");
+  const done = werf.posities.filter(p=>p.done).length;
+  return `<div class="stack">
+    <div class="row" style="justify-content:space-between;align-items:center"><h2>${done} van ${werf.posities.length} posities klaar</h2>
+      <div class="row"><button class="btn primary" type="button" id="mkpdf">PDF bewaren</button><button class="btn" type="button" id="sharepdf">PDF delen</button><button class="btn" type="button" id="mkjson">Reservekopie</button></div></div>
+    <div class="panel scroll"><table class="ov"><thead><tr><th>Pos.</th><th>Plaats</th><th>Type</th><th>PM B × H</th><th>Dorpel</th><th>Foto's</th><th>Status</th></tr></thead><tbody>${rows}</tbody></table></div>
+    <p class="muted" style="margin:0">Tik op een positie om ze te openen. De PDF bevat per positie alle maten, keuzes, bestellengtes en foto's.</p>
+  </div>`;
+}
+
+function renderFoot(){
+  const f=$("#foot");
+  if(view!=="pos"){ f.hidden=true; return; }
+  f.hidden=false;
+  const n=werf.posities.length;
+  f.innerHTML=`<button class="btn" type="button" id="prevpos" ${curPos===0?"disabled":""}>‹ Vorige</button>
+    <span class="mid">Positie ${curPos+1} van ${n}</span>
+    <button class="btn primary" type="button" id="nextpos">${curPos<n-1?"Volgende ›":"+ Nieuwe positie"}</button>`;
+}
+
+function updateCalc(){
+  const p=P(); if(!p) return;
+  document.querySelectorAll("[data-calc]").forEach(el=>{ const [k,d]=el.dataset.calc.split("."); const v=minOf(p[k][d]); el.querySelector("span").textContent=v===""?"–":v; });
+  const L=lens(p); document.querySelectorAll("[data-len]").forEach(el=>{ const r=L.find(x=>x[0]===el.dataset.len); el.textContent=r&&r[2]!==""?r[2]:"–"; });
+}
+
+/* ---------- foto's ---------- */
+async function loadPhotos(){
+  const box=$("#photos"); if(!box) return;
+  const p=P();
+  for(const id of p.photos){
+    const data=await get("photo:"+id); if(!data) continue;
+    const d=document.createElement("div"); d.className="photo";
+    d.innerHTML=`<img alt="Foto positie ${esc(p.nr)}"><button type="button" data-delphoto="${id}" aria-label="Foto verwijderen">×</button>`;
+    d.querySelector("img").src=data; box.appendChild(d);
+  }
+}
+function shrink(file){
+  return new Promise((res,rej)=>{
+    const fr=new FileReader();
+    fr.onload=()=>{ const img=new Image(); img.onload=()=>{ const m=1400, s=Math.min(1,m/Math.max(img.width,img.height));
+      const c=document.createElement("canvas"); c.width=Math.round(img.width*s); c.height=Math.round(img.height*s);
+      c.getContext("2d").drawImage(img,0,0,c.width,c.height); res(c.toDataURL("image/jpeg",0.78)); }; img.onerror=rej; img.src=fr.result; };
+    fr.onerror=rej; fr.readAsDataURL(file);
+  });
+}
+
+/* ---------- PDF (eigen, offline PDF-schrijver: tekst, lijnen, vlakken, JPEG-foto's) ---------- */
+const MM = 72/25.4;
+const WIN = {"€":128,"‚":130,"„":132,"…":133,"–":150,"—":151,"‘":145,"’":146,"“":147,"”":148,"•":149,"·":183,"×":215};
+function pdfStr(s){
+  let o=""; for(const ch of String(s==null?"":s).replace(/≠/g,"<>").replace(/−/g,"-")){ let c=ch.charCodeAt(0);
+    if(WIN[ch]!==undefined) c=WIN[ch]; else if(c>255) c=63;
+    if(c===40||c===41||c===92) o+="\\"+String.fromCharCode(c);
+    else if(c<32||c>126) o+="\\"+c.toString(8).padStart(3,"0"); else o+=String.fromCharCode(c); }
+  return "("+o+")";
+}
+class MiniPdf{
+  constructor(){ this.W=297; this.H=210; this.pages=[]; this.images=[]; this.cur=null; }
+  addPage(){ this.cur={ops:[],imgs:[]}; this.pages.push(this.cur); }
+  y(v){ return (this.H-v)*MM; }
+  fill(rgb){ this.cur.ops.push(rgb.map(v=>(v/255).toFixed(3)).join(" ")+" rg"); }
+  stroke(rgb){ this.cur.ops.push(rgb.map(v=>(v/255).toFixed(3)).join(" ")+" RG"); }
+  rect(x,y,w,h,rgb){ this.fill(rgb); this.cur.ops.push(`${(x*MM).toFixed(2)} ${this.y(y+h).toFixed(2)} ${(w*MM).toFixed(2)} ${(h*MM).toFixed(2)} re f`); }
+  line(x1,y1,x2,y2,rgb,wd){ this.stroke(rgb||[200,200,200]); this.cur.ops.push(`${(wd||0.3)*MM} w ${(x1*MM).toFixed(2)} ${this.y(y1).toFixed(2)} m ${(x2*MM).toFixed(2)} ${this.y(y2).toFixed(2)} l S`); }
+  text(x,y,s,size,bold,rgb){ this.fill(rgb||[28,43,58]); this.cur.ops.push(`BT /${bold?"F2":"F1"} ${size} Tf ${(x*MM).toFixed(2)} ${this.y(y).toFixed(2)} Td ${pdfStr(s)} Tj ET`); }
+  wrap(s,size,maxMm){ const maxCh=Math.max(10,Math.floor(maxMm*MM/(size*0.5))); const out=[];
+    String(s).split("\n").forEach(par=>{ let line=""; par.split(" ").forEach(w=>{ if((line+" "+w).trim().length>maxCh){ if(line) out.push(line); line=w; } else line=(line?line+" ":"")+w; }); out.push(line); });
+    return out; }
+  image(bytes,pxW,pxH,x,y,w,h){ const idx=this.images.length; this.images.push({bytes,pxW,pxH}); this.cur.imgs.push(idx);
+    this.cur.ops.push(`q ${(w*MM).toFixed(2)} 0 0 ${(h*MM).toFixed(2)} ${(x*MM).toFixed(2)} ${this.y(y+h).toFixed(2)} cm /Im${idx} Do Q`); }
+  output(){
+    const enc=new TextEncoder(); const parts=[]; let len=0; const offs=[];
+    const push=b=>{ const u=typeof b==="string"?enc.encode(b):b; parts.push(u); len+=u.length; };
+    const objs=[]; const add=o=>{ objs.push(o); return objs.length; };
+    const fontR=add("<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>");
+    const fontB=add("<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold /Encoding /WinAnsiEncoding >>");
+    const imgIds=this.images.map(im=>add({head:`<< /Type /XObject /Subtype /Image /Width ${im.pxW} /Height ${im.pxH} /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length ${im.bytes.length} >>`,bytes:im.bytes}));
+    const pagesId=objs.length+this.pages.length*2+1;
+    const pageIds=[];
+    this.pages.forEach(pg=>{
+      const content=pg.ops.join("\n"); const cb=enc.encode(content);
+      const cid=add({head:`<< /Length ${cb.length} >>`,bytes:cb});
+      const xo=pg.imgs.map(i=>`/Im${i} ${imgIds[i]} 0 R`).join(" ");
+      pageIds.push(add(`<< /Type /Page /Parent ${pagesId} 0 R /MediaBox [0 0 ${(this.W*MM).toFixed(2)} ${(this.H*MM).toFixed(2)}] /Resources << /Font << /F1 ${fontR} 0 R /F2 ${fontB} 0 R >> /XObject << ${xo} >> >> /Contents ${cid} 0 R >>`));
+    });
+    const pid=add(`<< /Type /Pages /Kids [${pageIds.map(i=>i+" 0 R").join(" ")}] /Count ${pageIds.length} >>`);
+    const cat=add(`<< /Type /Catalog /Pages ${pid} 0 R >>`);
+    push("%PDF-1.4\n%\xE2\xE3\xCF\xD3\n");
+    objs.forEach((o,i)=>{ offs.push(len); push(`${i+1} 0 obj\n`);
+      if(typeof o==="string") push(o+"\n"); else { push(o.head+"\nstream\n"); push(o.bytes); push("\nendstream\n"); }
+      push("endobj\n"); });
+    const xref=len;
+    push(`xref\n0 ${objs.length+1}\n0000000000 65535 f \n`+offs.map(o=>String(o).padStart(10,"0")+" 00000 n \n").join(""));
+    push(`trailer\n<< /Size ${objs.length+1} /Root ${cat} 0 R >>\nstartxref\n${xref}\n%%EOF`);
+    return new Blob(parts,{type:"application/pdf"});
+  }
+}
+function dataUrlBytes(d){ const b=atob(d.split(",")[1]); const u=new Uint8Array(b.length); for(let i=0;i<b.length;i++) u[i]=b.charCodeAt(i); return u; }
+function imgSize(d){ return new Promise(res=>{ const i=new Image(); i.onload=()=>res([i.naturalWidth,i.naturalHeight]); i.onerror=()=>res(null); i.src=d; }); }
+
+async function buildPdf(){
+  const doc=new MiniPdf(); const W=297, blue=[26,95,173], grey=[110,120,135];
+  const head=(t)=>{ doc.rect(0,0,W,14,blue); doc.text(10,9.6,"Ve.Ra +",15,true,[255,255,255]); doc.text(42,9.2,t,10,false,[255,255,255]);
+    doc.text(200,9.2,(werf.klant||"")+(werf.offerte?"  ·  "+werf.offerte:""),10,false,[255,255,255]); };
+  doc.addPage(); head("Definitieve opmeting – overzicht");
+  const info=[["Klant",werf.klant],["Offerte",werf.offerte],["Adres werf",werf.adres],["Telefoon",werf.tel],["Datum opmeting",werf.datum],["Opmeter","Anthony Emmerechts"],
+    ["Systeem",werf.systeem],["Kleur buiten",werf.kleurBu],["Kleur binnen",werf.kleurBi],["Beslag",werf.beslag],["Glas",werf.glas]];
+  info.forEach(([a,b],i)=>{ const x=i<6?10:150, y=24+(i<6?i:i-6)*6; doc.text(x,y,a,10,false,grey); doc.text(x+36,y,b||"–",10); });
+  let y=66; [["Pos.",10],["Plaats",28],["Type",80],["PM B × H",150],["Dorpel",195],["Status",255]].forEach(([t,x])=>doc.text(x,y,t,10,true));
+  werf.posities.forEach((p,i)=>{ y+=7; if(y>195){ doc.addPage(); head("Overzicht (vervolg)"); y=26; }
+    doc.line(10,y+2,287,y+2); doc.text(10,y,p.nr||i+1,10); doc.text(28,y,p.plaats,10); doc.text(80,y,p.type||p.kind,10);
+    doc.text(150,y,p.pmB||p.pmH?`${p.pmB} × ${p.pmH}`:"–",10); doc.text(195,y,p.dorpel,10); doc.text(255,y,p.done?"klaar":"open",10); });
+  for(const [i,p] of werf.posities.entries()){
+    doc.addPage(); head(`Positie ${p.nr||i+1} – ${p.plaats||""} – ${p.type||p.kind}`);
+    const m=(k)=>[0,1,2].map(j=>`${p[k].b[j]||"–"} × ${p[k].h[j]||"–"}`).join("    ");
+    const L=[["DM",m("dm")],["Kleinste DM",`${minOf(p.dm.b)||"–"} × ${minOf(p.dm.h)||"–"}`],["BM",m("bm")],["Kleinste BM",`${minOf(p.bm.b)||"–"} × ${minOf(p.bm.h)||"–"}`],
+      ["PM (bestelmaat)",`${p.pmB||"–"} × ${p.pmH||"–"} mm`],["Offertemaat",`${p.offB||"–"} × ${p.offH||"–"}`],["BIBU",`${p.bi||"–"} / ${p.bu||"–"}    /M ${p.bibuM||"–"}`],
+      ["A · D · H≠",`${p.a||"–"} · ${p.d||"–"} · ${p.hneq||"–"}`]];
+    if(p.kind==="raam") L.push(["P / K / T",`P ${p.P.join("")||"–"}    K ${p.K.join("")||"–"}    T ${p.T.join("")||"–"}`],["vp · krukhoogte",`${p.vp||"–"} · ${p.krukH||"–"}`]);
+    else L.push(["Draairichting",p.draai||"–"],["VD · krukhoogte",`${p.vd||"–"} · ${p.krukH||"–"}`],["Slot · cilinder",`${p.slot||"–"} · ${p.cilinder||"–"}`],["Paneel",p.paneel||"–"]);
+    L.push(["Verdieping · gevel",`${p.verdieping||"–"} · ${p.gevel||"–"}`]);
+    const R=[["Dorpel",p.dorpel],["Kruk",p.kruk],["Scharnieren",p.scharnieren],["Soudage inviline",p.soudage?"ja":"nee"],["Info prod",p.infoprod],
+      ["Binnenafwerking",[p.binnen,p.binnenBr&&p.binnenBr+" mm"].filter(Boolean).join(", ")],["Tablet",[p.tablet,p.tabletMaat].filter(Boolean).join(", ")],
+      ["Buitendorpel",[p.buitendorpel,p.bdD&&"D "+p.bdD].filter(Boolean).join(", ")],["Rolluik / screen",[p.rlType,p.rlB&&p.rlH&&`${p.rlB} × ${p.rlH}`,p.rlBed,p.rlZijde].filter(Boolean).join(", ")]];
+    let yy=24; L.forEach(([a,b])=>{ doc.text(10,yy,a,9.5,false,grey); doc.text(46,yy,b,9.5); yy+=6.2; });
+    let ry=24; R.forEach(([a,b])=>{ doc.text(160,ry,a,9.5,false,grey); doc.text(196,ry,b||"–",9.5); ry+=6.2; });
+    ry+=2; doc.text(160,ry,"Bestellengtes",9.5,true);
+    const acc=lens(p).filter(x=>p.acc.includes(x[0])).map(x=>`${x[1]}: ${x[2]}`);
+    (acc.length?acc:["–"]).forEach(t=>{ ry+=5.6; doc.text(160,ry,t,9.5); });
+    let ny=Math.max(yy,ry)+6;
+    const note=[p.opties,p.notes].filter(Boolean).join("\n");
+    if(note){ doc.text(10,ny,"Opmerkingen",9.5,true); const t=doc.wrap(note,9.5,270); t.forEach((l,k)=>doc.text(10,ny+5.5+k*4.6,l,9.5)); ny+=7+t.length*4.6; }
+    let px=10; const py=Math.min(ny+2,150);
+    for(const id of p.photos.slice(0,4)){ const d=await get("photo:"+id); if(!d) continue; const sz=await imgSize(d); if(!sz) continue;
+      const h=Math.min(200-py,48), w=h*sz[0]/sz[1]; if(px+w>287) break; doc.image(dataUrlBytes(d),sz[0],sz[1],px,py,w,h); px+=w+4; }
+    doc.text(10,203,"Opmeter: Anthony Emmerechts    ·    Paraaf klant: ____________________",8,false,grey);
+  }
+  return doc.output();
+}
+function fname(ext){ return `Opmeting ${werf.klant||"werf"} ${werf.offerte||""}`.replace(/[\\/:*?"<>|]/g,"").replace(/\s+/g," ").trim()+ext; }
+function saveBlob(blob,filename){
+  const a=document.createElement("a"); a.href=URL.createObjectURL(blob); a.download=filename; document.body.appendChild(a); a.click();
+  setTimeout(()=>{ URL.revokeObjectURL(a.href); a.remove(); },4000); toast("Bewaard in Downloads: "+filename);
+}
+async function shareBlob(blob,filename){
+  try{ const f=new File([blob],filename,{type:blob.type});
+    if(navigator.canShare && navigator.canShare({files:[f]})){ await navigator.share({files:[f],title:filename}); return; }
+  }catch(e){ if(e&&e.name==="AbortError") return; }
+  saveBlob(blob,filename);
+}
+async function backupBlob(){
+  const photos={}; for(const p of werf.posities) for(const id of p.photos){ const d=await get("photo:"+id); if(d) photos[id]=d; }
+  return new Blob([JSON.stringify({v:1,werf,photos})],{type:"application/json"});
+}
+
+/* ---------- acties ---------- */
+async function openWerf(id){
+  const w=await get("werf:"+id); if(!w){ toast("Deze werf werd niet gevonden op deze tablet."); return; }
+  werf=w; curPos=0; step="maten"; view="pos"; render();
+}
+function addPos(kind){
+  const last=werf.posities[werf.posities.length-1];
+  const nr = last && /^\d+$/.test(last.nr) ? String(+last.nr+1) : String(werf.posities.length+1);
+  werf.posities.push(newPos(kind,nr)); curPos=werf.posities.length-1; step="maten"; scheduleSave(); render();
+  setTimeout(()=>{ const f=document.querySelector("[data-m]"); f&&f.focus(); },60);
+}
+document.addEventListener("click", async e=>{
+  const t=e.target.closest("button,[data-check],[data-acc],tr[data-gopos]"); if(!t) return;
+  const ds=t.dataset;
+  if(t.id==="nav-werven"){ view="werven"; render(); return; }
+  if(t.id==="nav-werf"){ view="werf"; render(); return; }
+  if(t.id==="nav-pos"){ view="pos"; render(); return; }
+  if(t.id==="nav-ov"){ view="ov"; render(); return; }
+  if(t.id==="newwerf"){ werf=newWerf(); scheduleSave(); view="werf"; render(); return; }
+  if(t.id==="importbtn"){ $("#importfile").click(); return; }
+  if(ds.open){ openWerf(ds.open); return; }
+  if(ds.check!==undefined){ const k=ds.check; werf.check=werf.check.includes(k)?werf.check.filter(x=>x!==k):[...werf.check,k]; t.setAttribute("aria-pressed",werf.check.includes(k)); scheduleSave(); return; }
+  if(t.id==="delwerf"){ const c=$("#delconfirm"); if(t.dataset.arm!=="1"){ t.dataset.arm="1"; t.textContent="Tik nogmaals om te verwijderen"; c.textContent="Foto's en maten van deze werf gaan verloren."; return; }
+    for(const p of werf.posities) for(const id of p.photos) await del("photo:"+id);
+    await del("werf:"+werf.id); index=index.filter(x=>x.id!==werf.id); await put("index",index); werf=null; view="werven"; render(); toast("Werf verwijderd"); return; }
+  if(!werf) return;
+  const p=P();
+  if(ds.pos!==undefined){ curPos=+ds.pos; render(); return; }
+  if(ds.addpos){ addPos(ds.addpos); return; }
+  if(ds.step){ step=ds.step; render(); return; }
+  if(ds.gopos!==undefined){ curPos=+ds.gopos; step="maten"; view="pos"; render(); return; }
+  if(t.id==="prevpos"&&curPos>0){ curPos--; render(); window.scrollTo(0,0); return; }
+  if(t.id==="nextpos"){ if(curPos<werf.posities.length-1){ curPos++; step="maten"; render(); window.scrollTo(0,0); } else addPos(p.kind); return; }
+  if(ds.seg){ const k=ds.seg; let v=ds.val; if(k==="vloerAf") v = v==="Ja"?true:"nee";
+    const cur = p[k]; p[k] = (cur===v)?"":v;
+    t.parentElement.querySelectorAll("[data-seg]").forEach(b=>b.setAttribute("aria-pressed",b===t&&p[k]!=="")); scheduleSave(); return; }
+  if(ds.multi){ const g=ds.multi, v=ds.val; p[g]=p[g].includes(v)?p[g].filter(x=>x!==v):[...p[g],v]; t.setAttribute("aria-pressed",p[g].includes(v)); scheduleSave(); return; }
+  if(ds.toggle){ p[ds.toggle]=!p[ds.toggle]; t.setAttribute("aria-pressed",!!p[ds.toggle]); scheduleSave(); if(ds.toggle==="done") toast(p.done?"Positie gemarkeerd als klaar":"Positie weer open"); return; }
+  if(ds.acc){ const k=ds.acc; p.acc=p.acc.includes(k)?p.acc.filter(x=>x!==k):[...p.acc,k]; t.setAttribute("aria-pressed",p.acc.includes(k)); scheduleSave(); return; }
+  if(ds.take){ const k=ds.take; const b=minOf(p[k].b), h=minOf(p[k].h); if(b===""&&h===""){ toast("Nog geen "+k.toUpperCase()+"-maten ingevuld"); return; }
+    if(b!=="") p.pmB=String(b); if(h!=="") p.pmH=String(h); document.querySelector('[data-p="pmB"]').value=p.pmB; document.querySelector('[data-p="pmH"]').value=p.pmH; scheduleSave(); return; }
+  if(ds.delphoto){ p.photos=p.photos.filter(x=>x!==ds.delphoto); await del("photo:"+ds.delphoto); t.closest(".photo").remove(); scheduleSave(); return; }
+  if(t.id==="delpos"){ if(t.dataset.arm!=="1"){ t.dataset.arm="1"; t.textContent="Tik nogmaals om te verwijderen"; return; }
+    for(const id of p.photos) await del("photo:"+id); werf.posities.splice(curPos,1); if(!werf.posities.length) werf.posities.push(newPos("raam",1));
+    curPos=Math.max(0,curPos-1); scheduleSave(); render(); toast("Positie verwijderd"); return; }
+  if(t.id==="mkpdf"||t.id==="sharepdf"){ const lab=t.textContent; t.disabled=true; t.textContent="PDF wordt gemaakt…";
+    try{ const blob=await buildPdf(); if(t.id==="mkpdf") saveBlob(blob,fname(".pdf")); else await shareBlob(blob,fname(".pdf")); }
+    catch(err){ toast("De PDF kon niet gemaakt worden."); } finally{ t.disabled=false; t.textContent=lab; } return; }
+  if(t.id==="mkjson"){ saveBlob(await backupBlob(),fname(" reservekopie.json")); return; }
+});
+document.addEventListener("keydown", e=>{
+  const t=e.target;
+  if((e.key==="Enter"||e.key==="Tab") && t.matches && t.matches("[data-m]") && !e.shiftKey){
+    const all=[...document.querySelectorAll("[data-m]")]; const i=all.indexOf(t);
+    e.preventDefault();
+    const nx = i<all.length-1 ? all[i+1] : document.querySelector('[data-p="pmB"]'); if(nx){ nx.focus(); try{ nx.select(); }catch(err){} }
+  }
+  if((e.key===" "||e.key==="Enter") && t.matches && t.matches("[data-check],[data-acc]")){ e.preventDefault(); t.click(); }
+});
+document.addEventListener("input", e=>{
+  const t=e.target;
+  if(t.dataset.w!==undefined && werf){ werf[t.dataset.w]=t.value; scheduleSave(); if(t.dataset.w==="klant"||t.dataset.w==="offerte") $("#werfname").textContent=(werf.klant||"Nieuwe werf")+(werf.offerte?" · "+werf.offerte:""); return; }
+  if(t.dataset.p!==undefined && werf){ setPath(P(),t.dataset.p,t.value); scheduleSave(); updateCalc();
+    if(t.dataset.p==="nr"){ const chip=document.querySelector(`.chip[data-pos="${curPos}"]`); if(chip) chip.lastChild.textContent=(t.value||curPos+1)+(P().kind==="deur"?" D":""); } }
+});
+document.addEventListener("change", async e=>{
+  const t=e.target;
+  if(t.id==="photoin" && t.files && werf){
+    const p=P(); let n=0;
+    for(const f of t.files){ try{ const d=await shrink(f); const id=uid(); await put("photo:"+id,d); p.photos.push(id); n++; }catch(err){ toast("Deze foto kon niet gelezen worden."); } }
+    t.value=""; scheduleSave(); render(); if(n) toast(n===1?"Foto toegevoegd":n+" foto's toegevoegd");
+  }
+  if(t.id==="importfile" && t.files && t.files[0]){
+    try{ const j=JSON.parse(await t.files[0].text()); if(!j.werf||!j.werf.posities) throw 0;
+      for(const [id,d] of Object.entries(j.photos||{})) await put("photo:"+id,d);
+      werf=j.werf; scheduleSave(); view="werf"; render(); toast("Reservekopie teruggezet");
+    }catch(err){ toast("Dit bestand is geen geldige reservekopie."); }
+    t.value="";
+  }
+});
+
+/* bij aantikken van een maatvak: bestaande waarde selecteren, zodat de DISTO ze vervangt */
+document.addEventListener("focusin", e=>{ const t=e.target; if(t.matches && t.matches("input.num")) { try{ t.select(); }catch(err){} } });
+/* scherm aan houden tijdens het meten */
+async function wake(){ try{ if(navigator.wakeLock && document.visibilityState==="visible") await navigator.wakeLock.request("screen"); }catch(e){} }
+document.addEventListener("visibilitychange",wake);
+
+/* ---------- start ---------- */
+(async function boot(){
+  index = (await get("index")) || [];
+  if(!index.length){ const ex=exampleWerf(); await put("werf:"+ex.id,ex); index=[{id:ex.id,klant:ex.klant,offerte:ex.offerte,updated:ex.updated,example:true,n:ex.posities.length}]; await put("index",index); }
+  const last = await get("last");
+  if(last && last.werf){ const w=await get("werf:"+last.werf); if(w){ werf=w; curPos=Math.min(last.pos||0,w.posities.length-1); step=last.step||"maten"; view=last.view||"pos"; } }
+  if(!werf){ const w=await get("werf:"+index[0].id); werf=w; view="pos"; step="maten"; }
+  render(); wake();
+  try{ if(navigator.storage && navigator.storage.persist) navigator.storage.persist(); }catch(e){}
+})();
+if("serviceWorker" in navigator){ window.addEventListener("load",()=>{ navigator.serviceWorker.register("sw.js").catch(()=>{}); }); }
+})();
+</script>
+
+</body>
+</html>
