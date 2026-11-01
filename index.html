@@ -124,7 +124,8 @@ input.t:focus,select.t:focus,textarea.t:focus,button:focus-visible{outline:3px s
   padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));
   padding-top:10px;padding-bottom:calc(10px + env(safe-area-inset-bottom,0px));display:flex;gap:10px;align-items:center}
 .foot .btn{min-height:var(--tap);font-size:17px;flex:1;max-width:260px}
-.foot .mid{flex:1;text-align:center;color:var(--muted);font-size:14px;min-width:0}
+.foot .mid{flex:1;text-align:center;color:var(--muted);font-size:14px;min-width:0;line-height:1.25}
+.foot .mid small{font-size:12px}
 .ex{display:inline-block;background:var(--accent-soft);color:var(--accent);font-size:12px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;padding:3px 8px;border-radius:6px}
 table.ov{width:100%;border-collapse:collapse;font-variant-numeric:tabular-nums}
 table.ov th{font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);text-align:left;padding:8px;border-bottom:1.5px solid var(--line)}
@@ -297,6 +298,7 @@ function vWerven(){
     <div class="row" style="justify-content:space-between;align-items:center"><h2>Werven op deze tablet</h2>
       <div class="row"><button class="btn primary" type="button" id="offwerf">+ Werf uit offerte (PDF)</button><button class="btn" type="button" id="newwerf">+ Lege werf</button></div></div>
     <div class="werflist">${items||'<p class="muted">Nog geen werven. Start een nieuwe werf.</p>'}</div>
+    ${backupPanel()}
     <div class="panel"><h3>Zo werkt het</h3>
       <p style="margin:0;max-width:65ch">Alles wordt op deze tablet bewaard, ook zonder bereik. Meet per positie eerst 3× breedte en dan 3× hoogte: met de DISTO in toetsenbordmodus springt elk volgend getal naar het juiste vak. Maak onder <b>Overzicht</b> een PDF voor productie en klant, of een reservekopie. Bestanden komen in de map Downloads.</p></div>
     <input type="file" id="offin" accept="application/pdf,.pdf" hidden>
@@ -483,7 +485,7 @@ function renderFoot(){
   f.hidden=false;
   const n=werf.posities.length;
   f.innerHTML=`<button class="btn" type="button" id="prevpos" ${curPos===0?"disabled":""}>‹ Vorige</button>
-    <span class="mid">Positie ${curPos+1} van ${n}</span>
+    <span class="mid">Positie ${curPos+1} van ${n}<br><small id="bkstat">${backupStatusText()}</small></span>
     <button class="btn primary" type="button" id="nextpos">${curPos<n-1?"Volgende ›":"+ Nieuwe positie"}</button>`;
 }
 
@@ -1138,6 +1140,107 @@ function offMini(p){
     <div class="offr"><span>Type</span><b>${esc(p.type)}</b></div>${o.vleugels?`<div class="offr"><span>Vleugels</span><b>${esc(o.vleugels)}</b></div>`:""}
     ${o.beslag?`<div class="offr"><span>Beslag / opening</span><b>${esc(o.beslag)}</b></div>`:""}</div>`;
 }
+/* ---------- automatische back-up naar Google Drive ---------- */
+const GD = {settings:{clientId:"",folderId:"",auto:true,lastError:""}, token:null, exp:0, busy:false, lastTry:0};
+async function loadSettings(){ const s=await get("settings"); if(s) Object.assign(GD.settings,s); }
+function saveSettings(){ put("settings",GD.settings); }
+function loadGis(){
+  if(window.google&&google.accounts&&google.accounts.oauth2) return Promise.resolve();
+  if(loadGis._p) return loadGis._p;
+  loadGis._p=new Promise((res,rej)=>{ const s=document.createElement("script"); s.src="https://accounts.google.com/gsi/client"; s.async=true;
+    s.onload=()=>res(); s.onerror=()=>{ loadGis._p=null; rej(new Error("Google-aanmelding kon niet geladen worden")); }; document.head.appendChild(s); });
+  return loadGis._p;
+}
+function tokenValid(){ return GD.token && Date.now() < GD.exp-60000; }
+async function getToken(interactive){
+  if(tokenValid()) return GD.token;
+  if(!GD.settings.clientId) throw new Error("Nog geen Client-ID ingesteld");
+  await loadGis();
+  return new Promise((res,rej)=>{
+    const c=google.accounts.oauth2.initTokenClient({client_id:GD.settings.clientId,scope:"https://www.googleapis.com/auth/drive.file",
+      callback:r=>{ if(r&&r.access_token){ GD.token=r.access_token; GD.exp=Date.now()+(+r.expires_in||3600)*1000; res(GD.token); } else rej(new Error(r&&r.error||"Geen toegang")); },
+      error_callback:e=>rej(new Error(e&&e.type==="popup_closed"?"Aanmeldvenster gesloten":"Aanmelden lukte niet"))});
+    c.requestAccessToken({prompt:interactive?"consent":""});
+  });
+}
+async function gfetch(url,opt={}){
+  const r=await fetch(url,{...opt,headers:{...(opt.headers||{}),Authorization:"Bearer "+GD.token}});
+  if(r.status===401){ GD.token=null; throw new Error("Aanmelding verlopen"); }
+  return r;
+}
+async function ensureFolder(){
+  if(GD.settings.folderId){ const r=await gfetch(`https://www.googleapis.com/drive/v3/files/${GD.settings.folderId}?fields=id,trashed`); if(r.ok){ const j=await r.json(); if(!j.trashed) return GD.settings.folderId; } }
+  const r=await gfetch("https://www.googleapis.com/drive/v3/files?fields=id",{method:"POST",headers:{"Content-Type":"application/json"},
+    body:JSON.stringify({name:"Ve.Ra+ Opmetingen",mimeType:"application/vnd.google-apps.folder"})});
+  if(!r.ok) throw new Error("Map maken lukte niet ("+r.status+")");
+  GD.settings.folderId=(await r.json()).id; saveSettings(); return GD.settings.folderId;
+}
+async function driveUpload(blob,name,mime,fileId){
+  const folder=await ensureFolder();
+  const start=async(id)=>{ const meta=id?{name}:{name,mimeType:mime,parents:[folder]};
+    return gfetch(id?`https://www.googleapis.com/upload/drive/v3/files/${id}?uploadType=resumable&fields=id`:"https://www.googleapis.com/upload/drive/v3/files?uploadType=resumable&fields=id",
+      {method:id?"PATCH":"POST",headers:{"Content-Type":"application/json; charset=UTF-8","X-Upload-Content-Type":mime},body:JSON.stringify(meta)}); };
+  let r=await start(fileId);
+  if(fileId && r.status===404) r=await start(null);
+  if(!r.ok) throw new Error("Upload starten lukte niet ("+r.status+")");
+  const loc=r.headers.get("Location"); if(!loc) throw new Error("Geen uploadadres ontvangen");
+  const u=await fetch(loc,{method:"PUT",headers:{"Content-Type":mime},body:blob});
+  if(!u.ok) throw new Error("Upload lukte niet ("+u.status+")");
+  return (await u.json()).id;
+}
+function baseName(){ return `Opmeting ${werf.klant||"werf"} ${werf.offerte||""}`.replace(/[\\/:*?"<>|]/g,"").replace(/\s+/g," ").trim(); }
+async function runBackup({interactive=false, pdf=null}={}){
+  if(!werf||GD.busy) return false;
+  if(!GD.settings.clientId){ if(interactive) toast("Stel eerst de back-up naar Google Drive in (scherm Werven)."); return false; }
+  if(!navigator.onLine){ werf.backupPending=true; scheduleSave(); updateBackupBadge(); if(interactive) toast("Geen internet: back-up volgt zodra je weer verbinding hebt."); return false; }
+  GD.busy=true; updateBackupBadge("bezig");
+  try{
+    await getToken(interactive);
+    werf.backup=werf.backup||{};
+    const json=await backupBlob();
+    werf.backup.fileId=await driveUpload(json,baseName()+" (reservekopie).json","application/json",werf.backup.fileId);
+    if(pdf) werf.backup.pdfId=await driveUpload(pdf,baseName()+".pdf","application/pdf",werf.backup.pdfId);
+    werf.backup.at=Date.now(); werf.backupPending=false; GD.settings.lastError=""; saveSettings(); scheduleSave();
+    if(interactive||pdf) toast(pdf?"PDF en back-up staan op Google Drive":"Back-up staat op Google Drive");
+    return true;
+  }catch(e){ GD.settings.lastError=e.message||"Back-up mislukt"; saveSettings(); werf.backupPending=true; scheduleSave();
+    if(interactive) toast("Back-up mislukt: "+GD.settings.lastError); return false; }
+  finally{ GD.busy=false; updateBackupBadge(); }
+}
+function needsBackup(){ return werf && (werf.backupPending || !werf.backup || !werf.backup.at || werf.updated > werf.backup.at + 1000); }
+/* automatisch: bij een tik (Positie klaar, volgende/vorige), of stil als er nog een geldige aanmelding is */
+function autoBackup(fromGesture){
+  if(!GD.settings.clientId||!GD.settings.auto||!werf||!needsBackup()) return;
+  if(Date.now()-GD.lastTry < 90000) return;
+  if(!fromGesture && !tokenValid()) return;
+  GD.lastTry=Date.now(); runBackup({interactive:false});
+}
+window.addEventListener("online",()=>autoBackup(false));
+document.addEventListener("visibilitychange",()=>{ if(document.visibilityState==="hidden"){ GD.lastTry=0; autoBackup(false); } });
+function backupStatusText(){
+  if(!GD.settings.clientId) return "";
+  if(GD.busy) return "back-up bezig…";
+  if(werf&&werf.backup&&werf.backup.at&&!needsBackup()) return "back-up "+new Date(werf.backup.at).toLocaleTimeString("nl-BE",{hour:"2-digit",minute:"2-digit"});
+  if(werf&&werf.backupPending&&!navigator.onLine) return "back-up wacht op internet";
+  return "back-up nog niet gemaakt";
+}
+function updateBackupBadge(){ const el=$("#bkstat"); if(el) el.textContent=backupStatusText(); }
+function backupPanel(){
+  const s=GD.settings;
+  if(!s.clientId) return `<div class="panel stack"><h3>Automatische back-up · Google Drive</h3>
+    <p style="margin:0;max-width:65ch">Bewaar elke werf automatisch op je Google Drive, in de map <b>Ve.Ra+ Opmetingen</b>. Dan ben je niets kwijt als de tablet stuk of verloren gaat. Je hebt eenmalig een <b>Client-ID</b> van Google nodig (zie de gids).</p>
+    <div class="row"><label class="f">Google Client-ID<input class="t" id="gdclient" placeholder="…apps.googleusercontent.com" autocomplete="off"></label>
+    <button class="btn primary" type="button" id="gdsave">Opslaan</button></div></div>`;
+  const w=werf&&werf.backup&&werf.backup.at?new Date(werf.backup.at).toLocaleString("nl-BE"):"nog niet";
+  return `<div class="panel stack"><h3>Automatische back-up · Google Drive</h3>
+    <div class="row" style="align-items:center"><span>${tokenValid()?"Verbonden met Google Drive":"Nog niet aangemeld in deze sessie"}</span>
+      <button class="btn" type="button" id="gdconnect">${tokenValid()?"Opnieuw verbinden":"Verbinden"}</button>
+      <button class="btn primary" type="button" id="gdnow"${werf?"":" disabled"}>Nu back-up maken</button></div>
+    <div class="seg"><button type="button" id="gdauto" aria-pressed="${!!s.auto}">Automatisch bij "Positie klaar" en volgende/vorige</button></div>
+    <p class="muted" style="margin:0">Laatste back-up van ${werf?esc(werf.klant||"deze werf"):"de werf"}: ${esc(w)}.${s.lastError?` <span class="bad">Laatste fout: ${esc(s.lastError)}</span>`:""}</p>
+    <details><summary class="muted">Client-ID wijzigen</summary><div class="row" style="margin-top:8px"><label class="f">Google Client-ID<input class="t" id="gdclient" value="${esc(s.clientId)}"></label><button class="btn" type="button" id="gdsave">Opslaan</button></div></details></div>`;
+}
+
 /* ---------- acties ---------- */
 async function openWerf(id){
   const w=await get("werf:"+id); if(!w){ toast("Deze werf werd niet gevonden op deze tablet."); return; }
@@ -1157,6 +1260,12 @@ document.addEventListener("click", async e=>{
   if(t.id==="nav-pos"){ view="pos"; render(); return; }
   if(t.id==="nav-ov"){ view="ov"; render(); return; }
   if(t.id==="newwerf"){ werf=newWerf(); scheduleSave(); view="werf"; render(); return; }
+  if(t.id==="gdsave"){ const v=($("#gdclient")||{}).value||""; const id=v.trim();
+    if(!/\.apps\.googleusercontent\.com$/.test(id)){ toast("Dit lijkt geen geldige Client-ID (eindigt op .apps.googleusercontent.com)."); return; }
+    GD.settings.clientId=id; GD.settings.folderId=""; GD.token=null; saveSettings(); render(); toast("Client-ID bewaard. Tik nu op Verbinden."); return; }
+  if(t.id==="gdconnect"){ try{ GD.token=null; await getToken(true); toast("Verbonden met Google Drive"); if(werf) await runBackup({interactive:true}); }catch(e){ toast(e.message); } render(); return; }
+  if(t.id==="gdnow"){ await runBackup({interactive:true}); render(); return; }
+  if(t.id==="gdauto"){ GD.settings.auto=!GD.settings.auto; saveSettings(); t.setAttribute("aria-pressed",GD.settings.auto); return; }
   if(t.id==="importbtn"){ $("#importfile").click(); return; }
   if(t.id==="offwerf"||t.id==="offload"){ const fi=$("#offin"); fi.dataset.mode=t.id; fi.click(); return; }
   if(ds.open){ openWerf(ds.open); return; }
@@ -1174,7 +1283,7 @@ document.addEventListener("click", async e=>{
     if(p.done){ p.done=false; scheduleSave(); render(); toast("Positie weer open"); return; }
     const c=checkPos(p);
     if(c.miss.length && t.dataset.arm!=="1"){ t.dataset.arm="1"; t.textContent=`Toch klaar? (${c.miss.length} ontbreekt)`; toast("Ontbreekt: "+c.miss.join(", ")); return; }
-    p.done=true; scheduleSave(); render(); toast("Positie gemarkeerd als klaar"); return; }
+    p.done=true; scheduleSave(); render(); toast("Positie gemarkeerd als klaar"); autoBackup(true); return; }
   if(t.id==="sigclear"){ werf.sign={naam:($("#signnaam")||{}).value||"",datum:($("#signdatum")||{}).value||""}; scheduleSave(); render(); return; }
   if(ds.skcolor){ SK.color=ds.skcolor; document.querySelectorAll("[data-skcolor]").forEach(b=>b.setAttribute("aria-pressed",b===t)); return; }
   if(ds.skwidth){ SK.width=+ds.skwidth; document.querySelectorAll("[data-skwidth]").forEach(b=>b.setAttribute("aria-pressed",b===t)); return; }
@@ -1185,8 +1294,8 @@ document.addEventListener("click", async e=>{
   if(ds.addpos){ addPos(ds.addpos); return; }
   if(ds.step){ step=ds.step; render(); return; }
   if(ds.gopos!==undefined){ curPos=+ds.gopos; step="maten"; view="pos"; render(); return; }
-  if(t.id==="prevpos"&&curPos>0){ curPos--; render(); window.scrollTo(0,0); return; }
-  if(t.id==="nextpos"){ if(curPos<werf.posities.length-1){ curPos++; step="maten"; render(); window.scrollTo(0,0); } else addPos(p.kind); return; }
+  if(t.id==="prevpos"&&curPos>0){ curPos--; render(); window.scrollTo(0,0); autoBackup(true); return; }
+  if(t.id==="nextpos"){ if(curPos<werf.posities.length-1){ curPos++; step="maten"; render(); window.scrollTo(0,0); } else addPos(p.kind); autoBackup(true); return; }
   if(ds.seg){ const k=ds.seg; let v=ds.val; if(k==="vloerAf") v = v==="Ja"?true:"nee";
     const cur = p[k]; p[k] = (cur===v)?"":v;
     t.parentElement.querySelectorAll("[data-seg]").forEach(b=>b.setAttribute("aria-pressed",b===t&&p[k]!=="")); scheduleSave(); return; }
@@ -1200,7 +1309,7 @@ document.addEventListener("click", async e=>{
     for(const id of p.photos) await del("photo:"+id); werf.posities.splice(curPos,1); if(!werf.posities.length) werf.posities.push(newPos("raam",1));
     curPos=Math.max(0,curPos-1); scheduleSave(); render(); toast("Positie verwijderd"); return; }
   if(t.id==="mkpdf"||t.id==="sharepdf"){ const lab=t.textContent; t.disabled=true; t.textContent="PDF wordt gemaakt…";
-    try{ const blob=await buildPdf(); if(t.id==="mkpdf") saveBlob(blob,fname(".pdf")); else await shareBlob(blob,fname(".pdf")); }
+    try{ const blob=await buildPdf(); if(t.id==="mkpdf") saveBlob(blob,fname(".pdf")); else await shareBlob(blob,fname(".pdf")); if(GD.settings.clientId&&GD.settings.auto) runBackup({pdf:blob}); }
     catch(err){ toast("De PDF kon niet gemaakt worden."); } finally{ t.disabled=false; t.textContent=lab; } return; }
   if(t.id==="mkjson"){ saveBlob(await backupBlob(),fname(" reservekopie.json")); return; }
 });
@@ -1256,6 +1365,7 @@ document.addEventListener("visibilitychange",wake);
 
 /* ---------- start ---------- */
 (async function boot(){
+  await loadSettings();
   index = (await get("index")) || [];
   if(!index.length){ const ex=exampleWerf(); await put("werf:"+ex.id,ex); index=[{id:ex.id,klant:ex.klant,offerte:ex.offerte,updated:ex.updated,example:true,n:ex.posities.length}]; await put("index",index); }
   const last = await get("last");
