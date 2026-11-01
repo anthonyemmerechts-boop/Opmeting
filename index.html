@@ -18,7 +18,7 @@
 :root{
   --bg:#EEF2F7; --panel:#FFFFFF; --ink:#152232; --muted:#5D6D80; --line:#C9D5E4;
   --accent:#1A5FAD; --accent-ink:#FFFFFF; --accent-soft:#DCE8F7; --calc:#E3EFD8; --calc-ink:#2E5A16;
-  --warn:#B4531A; --ok:#2F7D3A;
+  --warn:#B4531A; --bad:#C8321E; --ok:#2F7D3A;
   --f-display:"Roboto Condensed","sans-serif-condensed","Arial Narrow",Arial,sans-serif;
   --f-body:Roboto,system-ui,-apple-system,"Segoe UI",sans-serif;
   --tap:52px; --r:10px;
@@ -26,11 +26,11 @@
 @media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
   --bg:#0F1720; --panel:#17222E; --ink:#E7EEF6; --muted:#97A7BA; --line:#2D3C4D;
   --accent:#5B9BE8; --accent-ink:#0B1420; --accent-soft:#1E3550; --calc:#1F3320; --calc-ink:#A6D58A;
-  --warn:#F0A060; --ok:#7CCB86; color-scheme:dark}}
+  --warn:#F0A060; --bad:#F27C68; --ok:#7CCB86; color-scheme:dark}}
 :root[data-theme="dark"]{
   --bg:#0F1720; --panel:#17222E; --ink:#E7EEF6; --muted:#97A7BA; --line:#2D3C4D;
   --accent:#5B9BE8; --accent-ink:#0B1420; --accent-soft:#1E3550; --calc:#1F3320; --calc-ink:#A6D58A;
-  --warn:#F0A060; --ok:#7CCB86; color-scheme:dark}
+  --warn:#F0A060; --bad:#F27C68; --ok:#7CCB86; color-scheme:dark}
 *{box-sizing:border-box}
 html,body{height:100%}
 body{background:var(--bg);color:var(--ink);font-family:var(--f-body);font-size:16px;line-height:1.35;-webkit-tap-highlight-color:transparent}
@@ -145,6 +145,16 @@ table.ov tr{cursor:pointer}
 .offr:last-child{border-bottom:0}
 .offr span{color:var(--muted);font-size:13px}
 .offr b{font-weight:600;min-width:0;overflow-wrap:anywhere}
+.copybar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:12px}
+.chk{border-radius:8px;padding:10px 12px;background:var(--bg);display:flex;flex-direction:column;gap:4px}
+.chk ul{margin:0 0 4px;padding-left:20px}.chk li{margin:2px 0}
+.chk .bad,.bad{color:var(--bad)}.chk .wrn,.wrn{color:var(--warn)}
+.chk.ok{background:var(--calc);color:var(--calc-ink)}
+.pmwarn{display:flex;flex-direction:column;gap:6px}
+.lw{background:color-mix(in srgb,var(--warn) 14%,var(--panel));color:var(--ink);border-left:4px solid var(--warn);border-radius:6px;padding:8px 10px;font-size:14px;font-weight:600}
+.sigwrap{position:relative;border:1.5px dashed var(--line);border-radius:8px;overflow:hidden;background:#fff;touch-action:none}
+.sigwrap canvas{display:block;touch-action:none}
+.siglab{position:absolute;left:10px;bottom:6px;font-size:12px;color:#7A8899;pointer-events:none}
 .skwrap{position:relative;width:100%;max-width:max(320px,calc((100dvh - 290px) * 1.3333));margin:0 auto;border:1.5px solid var(--line);border-radius:8px;overflow:hidden;background:#fff;touch-action:none}
 .skwrap canvas{display:block;touch-action:none;cursor:crosshair}
 .sklabel{position:absolute;left:10px;bottom:8px;font-size:12px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:#7A8899;pointer-events:none}
@@ -267,6 +277,7 @@ function render(){
   else app.innerHTML=vPos();
   renderFoot();
   if(view==="pos") { updateCalc(); loadPhotos(); initSketch(); }
+  if(view==="ov") initSign();
   put("last",{werf:werf&&werf.id,pos:curPos,step,view});
 }
 
@@ -359,6 +370,7 @@ function sMaten(p){
         <div class="pm">${inp("pmB",p.pmB,'inputmode="decimal" aria-label="PM breedte"',"t num")}<span class="x">×</span>${inp("pmH",p.pmH,'inputmode="decimal" aria-label="PM hoogte"',"t num")}</div>
         <div class="quick"><button type="button" data-take="dm">= kleinste DM</button><button type="button" data-take="bm">= kleinste BM</button>
           <span class="muted" style="align-self:center">Offerte: ${esc(p.offB||"–")} × ${esc(p.offH||"–")}</span></div>
+        <div id="pmwarn" class="pmwarn" hidden></div>
       </div>
       <div class="panel grid" style="grid-template-columns:repeat(3,minmax(0,1fr))">
         <h3 style="grid-column:1/-1;margin:0">BIBU · A · D · H≠</h3>
@@ -385,7 +397,7 @@ function doorSvg(inward,left){
 function sUitv(p){
   if(p.kind==="deur"){
     const opts=[["binnen L",1,1],["binnen R",1,0],["buiten L",0,1],["buiten R",0,0]];
-    return `<div class="grid cols-2">
+    return `${copyBar()}<div class="grid cols-2">
       <div class="panel stack"><h3>Draairichting · binnenzicht</h3>
         <div class="door">${opts.map(([l,i,lf])=>`<button type="button" data-seg="draai" data-val="${l}" aria-pressed="${p.draai===l}">${doorSvg(i,lf)}${l}</button>`).join("")}</div>
         <h3>Slot</h3>${seg("slot",["5-punt","Cremone auto","Elektrisch","Andere"],p.slot)}
@@ -397,8 +409,9 @@ function sUitv(p){
         ${offPanel(p)}${lensPanel(p)}
       </div></div>`;
   }
-  return `<div class="grid cols-2">
-    <div class="panel stack"><h3>Dorpel</h3>${seg("dorpel",["5412 (20)","5183 (74)","110.079","110.126","U645","EPDM","Geen"],p.dorpel)}
+  const dz=draaiOpts(p);
+  return `${copyBar()}<div class="grid cols-2">
+    <div class="panel stack">${dz?`<h3>Draaizijde · binnenzicht</h3>${seg("draaizijde",dz,p.draaizijde)}`:""}<h3>Dorpel</h3>${seg("dorpel",["5412 (20)","5183 (74)","110.079","110.126","U645","EPDM","Geen"],p.dorpel)}
       <h3>Kruk</h3>${seg("kruk",["Standaard","Victory 9004","Afsluitbaar 9004","Andere"],p.kruk)}
       <h3>Scharnieren</h3>${seg("scharnieren",["Verdekt","Zichtbaar"],p.scharnieren)}
       <h3>Info prod</h3>${seg("infoprod",["Ja","Nee"],p.infoprod)}
@@ -415,7 +428,7 @@ function lensPanel(p){
     <p class="muted" style="margin:0;font-size:13px">Tik aan wat besteld moet worden. Lengtes passen zich aan als de PM wijzigt.</p></div>`;
 }
 function sAfw(p){
-  return `<div class="grid cols-2">
+  return `${copyBar()}<div class="grid cols-2">
     <div class="panel stack"><h3>Binnenafwerking</h3>${seg("binnen",["Chambrant","PVC afkasting","Geen / PUR","Pleister"],p.binnen)}
       <label class="f">Breedte (mm)${inp("binnenBr",p.binnenBr,'inputmode="decimal"',"t num")}</label>
       <h3>Tablet</h3>${seg("tablet",["PVC wit","PVC blauwsteen","Natuursteen","Bestaand","Geen"],p.tablet)}
@@ -437,8 +450,9 @@ function sFoto(p){
       </div></div>
     <div class="panel stack"><h3>Opmerkingen</h3>
       <textarea class="t" data-p="notes" rows="8" placeholder="Bv. tegels wegnemen, kruk zo laag mogelijk, PAC 80 mm">${esc(p.notes)}</textarea>
+      <h3>Controle</h3>${checkHtml(p)}
       <div class="seg"><button type="button" data-toggle="bijkomend" aria-pressed="${!!p.bijkomend}">Bijkomende positie</button>
-        <button type="button" data-toggle="done" aria-pressed="${!!p.done}">Positie klaar</button></div>
+        <button type="button" id="donebtn" aria-pressed="${!!p.done}">${p.done?"Positie klaar ✓":"Positie klaar"}</button></div>
       <div class="row"><button class="btn danger" type="button" id="delpos">Positie verwijderen</button><span class="muted" id="delposc"></span></div>
     </div></div>`;
 }
@@ -446,12 +460,13 @@ function sFoto(p){
 function vOverzicht(){
   const rows = werf.posities.map((p,i)=>`<tr data-gopos="${i}"><td><b>${esc(p.nr||i+1)}</b></td><td>${esc(p.plaats)}</td><td>${esc(p.type||p.kind)}</td>
     <td>${p.pmB||p.pmH?esc(p.pmB)+" × "+esc(p.pmH):'<span class="muted">nog geen PM</span>'}</td><td>${esc(p.dorpel)}</td><td>${p.photos.length}</td>
-    <td><span class="state ${p.done?"done":""}"><i></i>${p.done?"klaar":"open"}</span></td></tr>`).join("");
+    <td>${(()=>{ const c=checkPos(p); return `<span class="state ${p.done?"done":""}"><i></i>${p.done?"klaar":"open"}${c.miss.length?` · <span class="bad">${c.miss.length} ontbreekt</span>`:c.warn.length?` · <span class="wrn">${c.warn.length} na te kijken</span>`:""}</span>`; })()}</td></tr>`).join("");
   const done = werf.posities.filter(p=>p.done).length;
   return `<div class="stack">
     <div class="row" style="justify-content:space-between;align-items:center"><h2>${done} van ${werf.posities.length} posities klaar</h2>
       <div class="row"><button class="btn primary" type="button" id="mkpdf">PDF bewaren</button><button class="btn" type="button" id="sharepdf">PDF delen</button><button class="btn" type="button" id="mkjson">Reservekopie</button></div></div>
     <div class="panel scroll"><table class="ov"><thead><tr><th>Pos.</th><th>Plaats</th><th>Type</th><th>PM B × H</th><th>Dorpel</th><th>Foto's</th><th>Status</th></tr></thead><tbody>${rows}</tbody></table></div>
+    ${signPanel()}
     <p class="muted" style="margin:0">Tik op een positie om ze te openen. De PDF bevat per positie alle maten, keuzes, bestellengtes, de schets en de foto's.</p>
   </div>`;
 }
@@ -470,6 +485,91 @@ function updateCalc(){
   const p=P(); if(!p) return;
   document.querySelectorAll("[data-calc]").forEach(el=>{ const [k,d]=el.dataset.calc.split("."); const v=minOf(p[k][d]); el.querySelector("span").textContent=v===""?"–":v; });
   const L=lens(p); document.querySelectorAll("[data-len]").forEach(el=>{ const r=L.find(x=>x[0]===el.dataset.len); el.textContent=r&&r[2]!==""?r[2]:"–"; });
+  liveWarn();
+}
+
+/* ---------- controles, draaizijde, overnemen, handtekening ---------- */
+function draaiOpts(p){
+  const t=(p.type||"").toLowerCase();
+  if(p.kind!=="raam" || !t || /^vast raam/.test(t) || /valraam/.test(t)) return null;
+  if(/schuif/.test(t)) return ["Schuivend links","Schuivend rechts"];
+  if(/2 vleugels/.test(t)) return ["Krukvleugel links","Krukvleugel rechts"];
+  return ["Scharnieren links","Scharnieren rechts"];
+}
+function spread(arr){ const v=arr.map(num).filter(x=>!isNaN(x)); return v.length>1?Math.round(Math.max(...v)-Math.min(...v)):0; }
+function checkPos(p){
+  const miss=[], warn=[];
+  if(!p.pmB||!p.pmH) miss.push("PM (bestelmaat)");
+  if(!p.dm.b.some(x=>String(x).trim())||!p.dm.h.some(x=>String(x).trim())) miss.push("Dagmaat (DM)");
+  if(draaiOpts(p) && !p.draaizijde) miss.push("Draaizijde raam");
+  if(p.kind==="deur" && !p.draai) miss.push("Draairichting deur");
+  if(!p.dorpel) miss.push("Dorpel");
+  const dev=(pm,off,lab)=>{ const a=num(pm), b=num(off); if(isNaN(a)||isNaN(b)||!b) return; const d=Math.round(a-b);
+    if(Math.abs(d)>30 || Math.abs(d)/b>0.03) warn.push(`PM ${lab} wijkt ${d>0?"+":""}${d} mm af van de offerte (${off})`); };
+  dev(p.pmB,p.offB,"breedte"); dev(p.pmH,p.offH,"hoogte");
+  [["dm","b","DM-breedtes"],["dm","h","DM-hoogtes"],["bm","b","BM-breedtes"],["bm","h","BM-hoogtes"]].forEach(([k,d,l])=>{ const s=spread(p[k][d]); if(s>10) warn.push(`${l} verschillen ${s} mm: uit het lood of scheef?`); });
+  const vp=num(p.vp); if(p.kind==="raam" && !isNaN(vp) && vp<850) warn.push(`Lage borstwering (vp ${Math.round(vp)} mm): controleer gelaagd glas (NBN S 23-002)`);
+  if(p.K.includes("TR") && !p.rlType) warn.push("Traditionele rolluikkast aanwezig: rolluik/screen nog niet gekozen");
+  if(p.T.length && !p.tablet) warn.push("Tablet/tegels aanwezig: tabletkeuze nog leeg");
+  if((p.P.length||p.K.filter(x=>x!=="TR").length) && !p.binnen) warn.push("Plakwerk/kassement aanwezig: binnenafwerking nog niet gekozen");
+  if(!p.photos.length) warn.push("Nog geen foto van de bestaande toestand");
+  return {miss,warn};
+}
+function checkHtml(p){
+  const {miss,warn}=checkPos(p);
+  if(!miss.length&&!warn.length) return `<div class="chk ok"><b>Alles ingevuld</b><span>Deze positie kan als klaar gemarkeerd worden.</span></div>`;
+  return `<div class="chk">${miss.length?`<b class="bad">Ontbreekt</b><ul>${miss.map(m=>`<li>${esc(m)}</li>`).join("")}</ul>`:""}
+    ${warn.length?`<b class="wrn">Controleer</b><ul>${warn.map(m=>`<li>${esc(m)}</li>`).join("")}</ul>`:""}</div>`;
+}
+function liveWarn(){
+  const box=$("#pmwarn"); if(!box) return; const p=P();
+  const w=checkPos(p).warn.filter(x=>/wijkt|verschillen|borstwering/.test(x));
+  box.innerHTML=w.map(x=>`<div class="lw">${esc(x)}</div>`).join(""); box.hidden=!w.length;
+}
+const COPY_FIELDS={uitv_raam:["kruk","scharnieren","soudage","infoprod"],uitv_deur:["slot","uitlijnen","soudage"],afw:["binnen","binnenBr","tablet","buitendorpel","bdD","rlBed"]};
+function copyKey(p,st){ return st==="afw"?"afw":(p.kind==="deur"?"uitv_deur":"uitv_raam"); }
+function copyBar(){ return `<div class="copybar"><button type="button" class="btn" id="cpprev">Zoals vorige positie</button>
+  <button type="button" class="btn" id="cpall">Invullen bij andere posities</button><span class="muted">Overnemen geldt voor de keuzes op dit scherm, niet voor maten of dorpel.</span></div>`; }
+const isEmpty=v=>v===""||v===false||v==null;
+function copyPrev(p){
+  const key=copyKey(p,step); const prev=werf.posities.slice(0,curPos).reverse().find(x=>key==="afw"||x.kind===p.kind);
+  if(!prev){ toast("Geen vorige positie om van over te nemen"); return; }
+  COPY_FIELDS[key].forEach(f=>{ p[f]=prev[f]; }); scheduleSave(); render(); toast(`Overgenomen van positie ${prev.nr}`);
+}
+function copyAll(p){
+  const key=copyKey(p,step); let n=0;
+  werf.posities.forEach(x=>{ if(x===p||(key!=="afw"&&x.kind!==p.kind)) return; let ch=false;
+    COPY_FIELDS[key].forEach(f=>{ if(isEmpty(x[f])&&!isEmpty(p[f])){ x[f]=p[f]; ch=true; } }); if(ch) n++; });
+  scheduleSave(); toast(n?`Ingevuld bij ${n} andere posities (enkel lege velden)`:"Geen lege velden gevonden bij andere posities");
+}
+/* handtekening */
+function signPanel(){
+  const s=werf.sign||{};
+  return `<div class="panel stack"><h3>Akkoord klant</h3>
+    <p style="margin:0;max-width:65ch">De klant bevestigt dat de opgemeten posities, uitvoering, kleuren, draairichtingen en afwerking correct zijn. Deze gegevens zijn bindend voor de productie.</p>
+    <div class="row"><label class="f">Naam klant<input class="t" id="signnaam" value="${esc(s.naam||werf.klant||"")}"></label>
+      <label class="f" style="max-width:200px">Datum<input class="t" id="signdatum" type="date" value="${esc(s.datum||new Date().toISOString().slice(0,10))}"></label></div>
+    <div class="sigwrap"><canvas id="sigcanvas" aria-label="Handtekening klant"></canvas><span class="siglab">Handtekening klant</span></div>
+    <div class="row"><button type="button" class="btn" id="sigclear">Handtekening wissen</button><span class="muted">${s.data?"Getekend":"Nog niet getekend"}</span></div></div>`;
+}
+function initSign(){
+  const cv=$("#sigcanvas"); if(!cv) return;
+  const wrap=cv.parentElement, dpr=window.devicePixelRatio||1, ctx=cv.getContext("2d");
+  const w=wrap.clientWidth, h=Math.round(Math.min(220,w*0.35));
+  cv.width=Math.round(w*dpr); cv.height=Math.round(h*dpr); cv.style.width=w+"px"; cv.style.height=h+"px";
+  ctx.fillStyle="#fff"; ctx.fillRect(0,0,cv.width,cv.height);
+  const s=werf.sign||{};
+  if(s.data){ const im=new Image(); im.onload=()=>ctx.drawImage(im,0,0,cv.width,cv.height); im.src=s.data; }
+  ctx.strokeStyle="#1C2B3A"; ctx.lineWidth=2.6*dpr; ctx.lineCap="round"; ctx.lineJoin="round";
+  let drawing=false, last=null;
+  const pt=e=>{ const r=cv.getBoundingClientRect(); return [(e.clientX-r.left)*dpr,(e.clientY-r.top)*dpr]; };
+  cv.onpointerdown=e=>{ drawing=true; last=pt(e); try{cv.setPointerCapture(e.pointerId);}catch(x){} e.preventDefault(); };
+  cv.onpointermove=e=>{ if(!drawing) return; const evs=e.getCoalescedEvents?e.getCoalescedEvents():[e];
+    for(const ev of evs){ const q=pt(ev); ctx.beginPath(); ctx.moveTo(last[0],last[1]); ctx.lineTo(q[0],q[1]); ctx.stroke(); last=q; } e.preventDefault(); };
+  const end=()=>{ if(!drawing) return; drawing=false;
+    werf.sign={naam:($("#signnaam")||{}).value||"",datum:($("#signdatum")||{}).value||"",data:cv.toDataURL("image/jpeg",0.9),w:cv.width,h:cv.height};
+    scheduleSave(); };
+  cv.onpointerup=end; cv.onpointercancel=end;
 }
 
 /* ---------- schets ---------- */
@@ -661,7 +761,7 @@ async function buildPdf(){
     if(p.kind==="raam") L.push(["Huidige afwerking",`Plakwerk ${p.P.join("")||"–"}   Kassement ${p.K.filter(x=>x!=="TR").join("")||"–"}${p.K.includes("TR")?" + trad. rolluikkast":""}   Tablet/tegels ${p.T.join("")||"–"}`],["vp · krukhoogte",`${p.vp||"–"} · ${p.krukH||"–"}`]);
     else L.push(["Draairichting",p.draai||"–"],["VD · krukhoogte",`${p.vd||"–"} · ${p.krukH||"–"}`],["Slot · cilinder",`${p.slot||"–"} · ${p.cilinder||"–"}`],["Paneel",p.paneel||"–"]);
     L.push(["Verdieping · gevel",`${p.verdieping||"–"} · ${p.gevel||"–"}`]);
-    const o=p.off||{}; const R=[["Profiel / kader",o.kader],["Kleur buiten",o.kleurBu||werf.kleurBu],["Kleur binnen",o.kleurBi||werf.kleurBi],["Dorpel",p.dorpel],["Kruk",p.kruk],["Scharnieren",p.scharnieren],["Soudage inviline",p.soudage?"ja":"nee"],["Info prod",p.infoprod],
+    const o=p.off||{}; const R=[["Profiel / kader",o.kader],...(p.kind==="raam"?[["Draaizijde",p.draaizijde]]:[]),["Kleur buiten",o.kleurBu||werf.kleurBu],["Kleur binnen",o.kleurBi||werf.kleurBi],["Dorpel",p.dorpel],["Kruk",p.kruk],["Scharnieren",p.scharnieren],["Soudage inviline",p.soudage?"ja":"nee"],["Info prod",p.infoprod],
       ["Binnenafwerking",[p.binnen,p.binnenBr&&p.binnenBr+" mm"].filter(Boolean).join(", ")],["Tablet",[p.tablet,p.tabletMaat].filter(Boolean).join(", ")],
       ["Buitendorpel",[p.buitendorpel,p.bdD&&"D "+p.bdD].filter(Boolean).join(", ")],["Rolluik / screen",[p.rlType,p.rlB&&p.rlH&&`${p.rlB} × ${p.rlH}`,p.rlBed,p.rlZijde].filter(Boolean).join(", ")]];
     let yy=24; L.forEach(([a,b])=>{ doc.text(10,yy,a,9.5,false,grey); doc.text(46,yy,b,9.5); yy+=6.2; });
@@ -679,6 +779,18 @@ async function buildPdf(){
       const h=Math.min(200-py,skd?66:48), w=h*sz[0]/sz[1]; if(px+w>287) break; doc.image(dataUrlBytes(d),sz[0],sz[1],px,py,w,h); px+=w+4; }
     doc.text(10,203,"Opmeter: Anthony Emmerechts    ·    Paraaf klant: ____________________",8,false,grey);
   }
+  const sg=werf.sign||{};
+  doc.addPage(); head("Akkoord opmeting");
+  ["De klant bevestigt dat de opgemeten posities, uitvoering, kleuren, draairichtingen en afwerking in deze opmeting",
+   "correct zijn. Deze gegevens zijn bindend voor de productie. Wijzigingen na ondertekening kunnen extra kosten",
+   "en een latere levering met zich meebrengen."].forEach((l,i)=>doc.text(10,26+i*6,l,10.5));
+  doc.text(10,52,"Aantal posities",10,false,grey); doc.text(50,52,String(werf.posities.length),10);
+  doc.text(10,60,"Naam klant",10,false,grey); doc.text(50,60,sg.naam||werf.klant||"",10);
+  doc.text(10,68,"Datum",10,false,grey); doc.text(50,68,sg.datum||new Date().toISOString().slice(0,10),10);
+  doc.text(10,80,"Handtekening klant",10,false,grey);
+  if(sg.data){ const h=45, w=Math.min(150,h*(sg.w||3)/(sg.h||1)); doc.image(dataUrlBytes(sg.data),sg.w||900,sg.h||300,10,84,w,h); }
+  doc.line(10,130,160,130,[160,160,160]);
+  doc.text(180,80,"Opmeter",10,false,grey); doc.text(180,88,"Anthony Emmerechts",10);
   return doc.output();
 }
 function fname(ext){ return `Opmeting ${werf.klant||"werf"} ${werf.offerte||""}`.replace(/[\\/:*?"<>|]/g,"").replace(/\s+/g," ").trim()+ext; }
@@ -910,6 +1022,14 @@ document.addEventListener("click", async e=>{
   const p=P();
   if(ds.pos!==undefined){ curPos=+ds.pos; render(); return; }
   if(ds.sktool){ SK.tool=ds.sktool; document.querySelectorAll("[data-sktool]").forEach(b=>b.setAttribute("aria-pressed",b===t)); const tw=$("#sktextwrap"); if(tw){ tw.hidden=SK.tool!=="text"; if(SK.tool==="text") $("#sktext").focus(); } return; }
+  if(t.id==="cpprev"){ copyPrev(p); return; }
+  if(t.id==="cpall"){ copyAll(p); return; }
+  if(t.id==="donebtn"){
+    if(p.done){ p.done=false; scheduleSave(); render(); toast("Positie weer open"); return; }
+    const c=checkPos(p);
+    if(c.miss.length && t.dataset.arm!=="1"){ t.dataset.arm="1"; t.textContent=`Toch klaar? (${c.miss.length} ontbreekt)`; toast("Ontbreekt: "+c.miss.join(", ")); return; }
+    p.done=true; scheduleSave(); render(); toast("Positie gemarkeerd als klaar"); return; }
+  if(t.id==="sigclear"){ werf.sign={naam:($("#signnaam")||{}).value||"",datum:($("#signdatum")||{}).value||""}; scheduleSave(); render(); return; }
   if(ds.skcolor){ SK.color=ds.skcolor; document.querySelectorAll("[data-skcolor]").forEach(b=>b.setAttribute("aria-pressed",b===t)); return; }
   if(ds.skwidth){ SK.width=+ds.skwidth; document.querySelectorAll("[data-skwidth]").forEach(b=>b.setAttribute("aria-pressed",b===t)); return; }
   if(t.id==="skundo"){ const it=skItems(p); if(it.length){ it.pop(); scheduleSave(); initSketch(); } else toast("Niets om ongedaan te maken"); return; }
@@ -949,6 +1069,7 @@ document.addEventListener("keydown", e=>{
 });
 document.addEventListener("input", e=>{
   const t=e.target;
+  if((t.id==="signnaam"||t.id==="signdatum") && werf){ werf.sign=Object.assign({},werf.sign,{[t.id==="signnaam"?"naam":"datum"]:t.value}); scheduleSave(); return; }
   if(t.dataset.w!==undefined && werf){ werf[t.dataset.w]=t.value; scheduleSave(); if(t.dataset.w==="klant"||t.dataset.w==="offerte") $("#werfname").textContent=(werf.klant||"Nieuwe werf")+(werf.offerte?" · "+werf.offerte:""); return; }
   if(t.dataset.p!==undefined && werf){ setPath(P(),t.dataset.p,t.value); scheduleSave(); updateCalc();
     if(t.dataset.p==="nr"){ const chip=document.querySelector(`.chip[data-pos="${curPos}"]`); if(chip) chip.lastChild.textContent=(t.value||curPos+1)+(P().kind==="deur"?" D":""); } }
