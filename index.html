@@ -343,7 +343,7 @@ function mBlock(key,p){
 }
 function sMaten(p){
   const pkt = p.kind==="raam" ? `<div class="panel"><h3>Huidige afwerking · aanduiden waar aanwezig</h3><div class="pkt">
-      ${[["P","Plakwerk","LRBO"],["K","Kassement",["L","R","B","O","TR"]],["T","Tablet / tegels","LRBO"]].map(([g,nm,o])=>`<span class="pktl"><b>${g}</b><small>${nm}</small></span><div class="seg">${[...o].length&&(Array.isArray(o)?o:o.split("")).map(x=>`<button type="button" data-multi="${g}" data-val="${x}" aria-pressed="${p[g].includes(x)}">${x}</button>`).join("")}</div>`).join("")}
+      ${[["P","Plakwerk","LRBO"],["K","Kassement",["L","R","B","O","TR"]],["T","Tablet / tegels","LRBO"]].map(([g,nm,o])=>`<span class="pktl"><b>${g}</b><small>${nm}</small></span><div class="seg">${[...o].length&&(Array.isArray(o)?o:o.split("")).map(x=>`<button type="button" data-multi="${g}" data-val="${x}" aria-pressed="${p[g].includes(x)}">${x==="TR"?"TR · trad. rolluikkast":x}</button>`).join("")}</div>`).join("")}
     </div></div>`
     : `<div class="panel grid" style="grid-template-columns:repeat(auto-fit,minmax(min(100%,150px),1fr))"><h3 style="grid-column:1/-1;margin:0">Deur</h3>
       <label class="f">VD / vloerpas${inp("vd",p.vd,'inputmode="decimal"',"t num")}</label>
@@ -658,7 +658,7 @@ async function buildPdf(){
     const L=[["DM",m("dm")],["Kleinste DM",`${minOf(p.dm.b)||"–"} × ${minOf(p.dm.h)||"–"}`],["BM",m("bm")],["Kleinste BM",`${minOf(p.bm.b)||"–"} × ${minOf(p.bm.h)||"–"}`],
       ["PM (bestelmaat)",`${p.pmB||"–"} × ${p.pmH||"–"} mm`],["Offertemaat",`${p.offB||"–"} × ${p.offH||"–"}`],["BIBU",`${p.bi||"–"} / ${p.bu||"–"}    /M ${p.bibuM||"–"}`],
       ["A · D · H≠",`${p.a||"–"} · ${p.d||"–"} · ${p.hneq||"–"}`]];
-    if(p.kind==="raam") L.push(["Huidige afwerking",`Plakwerk ${p.P.join("")||"–"}   Kassement ${p.K.join("")||"–"}   Tablet/tegels ${p.T.join("")||"–"}`],["vp · krukhoogte",`${p.vp||"–"} · ${p.krukH||"–"}`]);
+    if(p.kind==="raam") L.push(["Huidige afwerking",`Plakwerk ${p.P.join("")||"–"}   Kassement ${p.K.filter(x=>x!=="TR").join("")||"–"}${p.K.includes("TR")?" + trad. rolluikkast":""}   Tablet/tegels ${p.T.join("")||"–"}`],["vp · krukhoogte",`${p.vp||"–"} · ${p.krukH||"–"}`]);
     else L.push(["Draairichting",p.draai||"–"],["VD · krukhoogte",`${p.vd||"–"} · ${p.krukH||"–"}`],["Slot · cilinder",`${p.slot||"–"} · ${p.cilinder||"–"}`],["Paneel",p.paneel||"–"]);
     L.push(["Verdieping · gevel",`${p.verdieping||"–"} · ${p.gevel||"–"}`]);
     const o=p.off||{}; const R=[["Profiel / kader",o.kader],["Kleur buiten",o.kleurBu||werf.kleurBu],["Kleur binnen",o.kleurBi||werf.kleurBi],["Dorpel",p.dorpel],["Kruk",p.kruk],["Scharnieren",p.scharnieren],["Soudage inviline",p.soudage?"ja":"nee"],["Info prod",p.infoprod],
