@@ -139,6 +139,11 @@ table.ov tr{cursor:pointer}
 .werflist{display:grid;gap:10px}
 .werfitem{display:flex;justify-content:space-between;align-items:center;gap:12px;min-height:64px;padding:10px 14px;border:1.5px solid var(--line);border-radius:10px;background:var(--panel);cursor:pointer;text-align:left;width:100%}
 .werfitem b{font-family:var(--f-display);font-size:20px}
+.offpanel{background:var(--accent-soft);border-color:transparent}
+.offr{display:grid;grid-template-columns:120px 1fr;gap:10px;padding:5px 0;border-bottom:1px solid color-mix(in srgb,var(--accent) 18%,transparent);font-size:15px}
+.offr:last-child{border-bottom:0}
+.offr span{color:var(--muted);font-size:13px}
+.offr b{font-weight:600;min-width:0;overflow-wrap:anywhere}
 .skwrap{position:relative;width:100%;max-width:max(320px,calc((100dvh - 290px) * 1.3333));margin:0 auto;border:1.5px solid var(--line);border-radius:8px;overflow:hidden;background:#fff;touch-action:none}
 .skwrap canvas{display:block;touch-action:none;cursor:crosshair}
 .sklabel{position:absolute;left:10px;bottom:8px;font-size:12px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:#7A8899;pointer-events:none}
@@ -273,10 +278,11 @@ function vWerven(){
     </button>`).join("");
   return `<div class="stack">
     <div class="row" style="justify-content:space-between;align-items:center"><h2>Werven op deze tablet</h2>
-      <button class="btn primary" type="button" id="newwerf">+ Nieuwe werf</button></div>
+      <div class="row"><button class="btn primary" type="button" id="offwerf">+ Werf uit offerte (PDF)</button><button class="btn" type="button" id="newwerf">+ Lege werf</button></div></div>
     <div class="werflist">${items||'<p class="muted">Nog geen werven. Start een nieuwe werf.</p>'}</div>
     <div class="panel"><h3>Zo werkt het</h3>
       <p style="margin:0;max-width:65ch">Alles wordt op deze tablet bewaard, ook zonder bereik. Meet per positie eerst 3× breedte en dan 3× hoogte: met de DISTO in toetsenbordmodus springt elk volgend getal naar het juiste vak. Maak onder <b>Overzicht</b> een PDF voor productie en klant, of een reservekopie. Bestanden komen in de map Downloads.</p></div>
+    <input type="file" id="offin" accept="application/pdf,.pdf" hidden>
     <div class="row"><button class="btn" type="button" id="importbtn">Reservekopie terugzetten</button>
       <input type="file" id="importfile" accept=".json,application/json" hidden></div>
   </div>`;
@@ -295,6 +301,7 @@ function vWerf(){
     <div class="panel stack"><h3>Algemeen volgens offerte</h3>${f("Systeem","systeem")}${f("Kleur buiten","kleurBu")}${f("Kleur binnen","kleurBi")}${f("Beslag","beslag")}${f("Glas","glas")}</div>
     <div class="panel"><h3>Werfcheck</h3><div class="lens">${checks.map(([k,l])=>`<div class="l" role="button" tabindex="0" data-check="${k}" aria-pressed="${werf.check.includes(k)}"><span class="box">✓</span><span>${l}</span><span></span></div>`).join("")}</div></div>
   </div>
+  <div class="row"><button class="btn primary" type="button" id="offload">Offerte inladen (PDF)</button><input type="file" id="offin" accept="application/pdf,.pdf" hidden><span class="muted">Neemt per element de plaats, het type, de offertemaat, het profiel en de kleuren over.</span></div>
   <div class="row"><button class="btn danger" type="button" id="delwerf">Werf verwijderen</button><span class="muted" id="delconfirm"></span></div>
   </div>`;
 }
@@ -386,7 +393,7 @@ function sUitv(p){
       <div class="stack">
         <div class="panel stack"><h3>Dorpel</h3>${seg("dorpel",["Alu deurdorpel","Vlakke dorpel","EPDM","Geen"],p.dorpel)}
           <label class="f">Paneel${inp("paneel",p.paneel)}</label><label class="f">Cilinder${inp("cilinder",p.cilinder)}</label></div>
-        ${lensPanel(p)}
+        ${offPanel(p)}${lensPanel(p)}
       </div></div>`;
   }
   return `<div class="grid cols-2">
@@ -396,7 +403,7 @@ function sUitv(p){
       <h3>Info prod</h3>${seg("infoprod",["Ja","Nee"],p.infoprod)}
       <div class="seg"><button type="button" data-toggle="soudage" aria-pressed="${!!p.soudage}">Soudage inviline</button></div>
     </div>
-    <div class="stack">${lensPanel(p)}
+    <div class="stack">${offPanel(p)}${lensPanel(p)}
       <div class="panel"><label class="f">Opties / vullingen${`<textarea class="t" data-p="opties" rows="3">${esc(p.opties)}</textarea>`}</label></div>
     </div></div>`;
 }
@@ -653,7 +660,7 @@ async function buildPdf(){
     if(p.kind==="raam") L.push(["P / K / T",`P ${p.P.join("")||"–"}    K ${p.K.join("")||"–"}    T ${p.T.join("")||"–"}`],["vp · krukhoogte",`${p.vp||"–"} · ${p.krukH||"–"}`]);
     else L.push(["Draairichting",p.draai||"–"],["VD · krukhoogte",`${p.vd||"–"} · ${p.krukH||"–"}`],["Slot · cilinder",`${p.slot||"–"} · ${p.cilinder||"–"}`],["Paneel",p.paneel||"–"]);
     L.push(["Verdieping · gevel",`${p.verdieping||"–"} · ${p.gevel||"–"}`]);
-    const R=[["Dorpel",p.dorpel],["Kruk",p.kruk],["Scharnieren",p.scharnieren],["Soudage inviline",p.soudage?"ja":"nee"],["Info prod",p.infoprod],
+    const o=p.off||{}; const R=[["Profiel / kader",o.kader],["Kleur buiten",o.kleurBu||werf.kleurBu],["Kleur binnen",o.kleurBi||werf.kleurBi],["Dorpel",p.dorpel],["Kruk",p.kruk],["Scharnieren",p.scharnieren],["Soudage inviline",p.soudage?"ja":"nee"],["Info prod",p.infoprod],
       ["Binnenafwerking",[p.binnen,p.binnenBr&&p.binnenBr+" mm"].filter(Boolean).join(", ")],["Tablet",[p.tablet,p.tabletMaat].filter(Boolean).join(", ")],
       ["Buitendorpel",[p.buitendorpel,p.bdD&&"D "+p.bdD].filter(Boolean).join(", ")],["Rolluik / screen",[p.rlType,p.rlB&&p.rlH&&`${p.rlB} × ${p.rlH}`,p.rlBed,p.rlZijde].filter(Boolean).join(", ")]];
     let yy=24; L.forEach(([a,b])=>{ doc.text(10,yy,a,9.5,false,grey); doc.text(46,yy,b,9.5); yy+=6.2; });
@@ -689,6 +696,189 @@ async function backupBlob(){
   return new Blob([JSON.stringify({v:1,werf,photos})],{type:"application/json"});
 }
 
+/* ---------- offerte inlezen (WinPro-offerte als PDF) ---------- */
+const WIN_HI = {128:"€",130:"‚",131:"ƒ",132:"„",133:"…",134:"†",135:"‡",136:"ˆ",137:"‰",138:"Š",139:"‹",140:"Œ",142:"Ž",145:"‘",146:"’",147:"“",148:"”",149:"•",150:"–",151:"—",152:"˜",153:"™",154:"š",155:"›",156:"œ",158:"ž",159:"Ÿ"};
+function winStr(codes){ let s=""; for(const c of codes) s+= c>=128&&c<160 ? (WIN_HI[c]||"") : String.fromCharCode(c); return s; }
+async function inflate(bytes){
+  let end=bytes.length; while(end>0&&(bytes[end-1]===10||bytes[end-1]===13||bytes[end-1]===32)) end--;
+  const ds=new DecompressionStream("deflate");
+  const out=new Response(new Blob([bytes.subarray(0,end)]).stream().pipeThrough(ds)).arrayBuffer();
+  return new Uint8Array(await out);
+}
+function findSeq(buf,seq,from){
+  outer: for(let i=from;i<=buf.length-seq.length;i++){ for(let j=0;j<seq.length;j++) if(buf[i+j]!==seq[j]) continue outer; return i; }
+  return -1;
+}
+async function pdfTextItems(buf){
+  const enc=s=>[...s].map(c=>c.charCodeAt(0));
+  const S=enc("stream"), E=enc("endstream");
+  const items=[]; let page=0, pos=0;
+  while(true){
+    const i=findSeq(buf,S,pos); if(i<0) break;
+    if(i>2 && buf[i-1]===100 && buf[i-2]===110 && buf[i-3]===101){ pos=i+6; continue; } // "endstream"
+    let st=i+6; if(buf[st]===13) st++; if(buf[st]===10) st++;
+    const e=findSeq(buf,E,st); if(e<0) break; pos=e+9;
+    const dict=new TextDecoder("latin1").decode(buf.subarray(Math.max(0,i-400),i));
+    const lastObj=dict.lastIndexOf("obj"); const d=lastObj>=0?dict.slice(lastObj):dict;
+    if(!/FlateDecode/.test(d)) continue;
+    let data; try{ data=await inflate(buf.subarray(st,e)); }catch(err){ continue; }
+    const txt=new TextDecoder("latin1").decode(data);
+    if(!/\bBT\b/.test(txt) || !/ Tf\b/.test(txt) || !/\b(Tm|Td)\b/.test(txt)) continue;
+    page++; parseContent(txt,page,items);
+  }
+  return {items,pages:page};
+}
+function parseContent(t,page,items){
+  const re=/\((?:\\[\s\S]|[^\\)])*\)|\[|\]|<[0-9A-Fa-f\s]*>|[-+]?\d*\.?\d+|\/[^\s\/\[\]()<>]+|[A-Za-z'"*]+/g;
+  let stack=[], arr=null, tm=[1,0,0,1,0,0], lm=tm.slice(), m;
+  const un=s=>{ const x=s.slice(1,-1); const c=[]; for(let i=0;i<x.length;i++){ const ch=x[i];
+      if(ch==="\\"&&i+1<x.length){ const n=x[i+1];
+        if("nrtbf".includes(n)){ if(n==="n") c.push(10); i++; }
+        else if(/[0-7]/.test(n)){ let o=""; let j=i+1; while(j<x.length&&o.length<3&&/[0-7]/.test(x[j])){ o+=x[j]; j++; } c.push(parseInt(o,8)); i=j-1; }
+        else { c.push(n.charCodeAt(0)); i++; } }
+      else c.push(ch.charCodeAt(0)); }
+    return winStr(c); };
+  while((m=re.exec(t))){
+    const w=m[0];
+    if(w==="["){ arr=[]; continue; }
+    if(w==="]"){ stack.push(arr||[]); arr=null; continue; }
+    if(arr){ if(w[0]==="(") arr.push(un(w)); else { const v=parseFloat(w); if(!isNaN(v)&&v<-250) arr.push(" "); } continue; }
+    if(w[0]==="("){ stack.push(un(w)); continue; }
+    if(w[0]==="<"){ stack.push(""); continue; }
+    const v=parseFloat(w); if(!isNaN(v)&&/^[-+]?\d*\.?\d+$/.test(w)){ stack.push(v); continue; }
+    if(w[0]==="/"){ stack.push(w); continue; }
+    if(w==="BT"){ tm=[1,0,0,1,0,0]; lm=tm.slice(); }
+    else if(w==="Tm"){ tm=stack.slice(-6).map(Number); lm=tm.slice(); }
+    else if(w==="Td"||w==="TD"){ const tx=stack[stack.length-2], ty=stack[stack.length-1];
+      lm=[lm[0],lm[1],lm[2],lm[3],lm[4]+tx*lm[0]+ty*lm[2],lm[5]+tx*lm[1]+ty*lm[3]]; tm=lm.slice(); }
+    else if(w==="TJ"||w==="Tj"||w==="'"){ const a=stack[stack.length-1]; const s=Array.isArray(a)?a.join(""):(a||"");
+      if(s) items.push({p:page,y:tm[5],x:tm[4],s}); }
+    stack=[];
+  }
+}
+function itemsToLines(items){
+  const by=new Map();
+  for(const it of items){ const k=it.p+":"+Math.round(it.y); if(!by.has(k)) by.set(k,{p:it.p,y:Math.round(it.y),its:[]}); by.get(k).its.push(it); }
+  const join=its=>{ its=its.slice().sort((a,b)=>a.x-b.x); let o="", end=null;
+    for(const it of its){ if(end!==null && it.x-end>8) o+=" "; o+=it.s; end=it.x+it.s.length*6.2; }
+    return o.replace(/\s+/g," ").trim(); };
+  return [...by.values()].sort((a,b)=>a.p-b.p||a.y-b.y).map(L=>({p:L.p,y:L.y,its:L.its,
+    all:join(L.its), left:join(L.its.filter(i=>i.x<250)), label:join(L.its.filter(i=>i.x>=250&&i.x<377)),
+    right:join(L.its.filter(i=>i.x>=377))}));
+}
+const cap=s=>String(s||"").toLowerCase().split(" ").map(w=>w.length<=2&&/^\p{L}+$/u.test(w)?w.toUpperCase():w.replace(/^\p{L}/u,c=>c.toUpperCase())).join(" ");
+function parseOfferte(lines){
+  const res={klant:"",klantnr:"",offerte:"",datum:"",systeem:"",kleur:"",elements:[]};
+  // eerste pagina: klantblok rechts
+  const p1=lines.filter(l=>l.p===1);
+  const kid=p1.find(l=>/Klant ID:\s*(\S+)/.test(l.all));
+  if(kid){ res.klantnr=(kid.all.match(/Klant ID:\s*(\S+)/)||[])[1]||"";
+    const names=p1.filter(l=>l.y<kid.y && l.y>kid.y-60).map(l=>l.its.filter(i=>i.x>280&&i.x<400).map(i=>i.s).join("").trim()).filter(Boolean);
+    res.klant=cap(names[0]||""); }
+  const off=lines.find(l=>/Offerte\s+([A-Z]{2,}-[A-Z0-9]+)/.test(l.all)); if(off) res.offerte=off.all.match(/Offerte\s+([A-Z]{2,}-[A-Z0-9]+)/)[1];
+  const sys=lines.find(l=>/Systeem\s*:/.test(l.all));
+  if(sys){ const mm=sys.all.match(/Systeem\s*:\s*(.*?)\s*Kleur\s*:\s*(.*)$/); if(mm){ res.systeem=mm[1].trim(); res.kleur=mm[2].trim();
+      const nx=lines.find(l=>l.p===sys.p&&l.y>sys.y&&l.y<sys.y+14&&/binnen\)/.test(l.right)); if(nx) res.kleur+=" "+nx.its.filter(i=>i.x>430).map(i=>i.s).join("").trim(); } }
+  // elementen
+  let cur=null;
+  const HDR=/^(Gekoppeld element|Element|Deur|element)\s+(\d{3})(?:\/(\d+))?$/i;
+  for(let k=0;k<lines.length;k++){
+    const L=lines[k]; const mh=L.left.replace(/\s*Hoev\..*$/,"").trim().match(HDR);
+    if(mh && /Hoev\.\s*:\s*\d+/.test(L.all)){
+      const hoev=+(L.all.match(/Hoev\.\s*:\s*(\d+)/)[1]);
+      const el={kop:mh[1],nr:mh[2],sub:mh[3]||"",hoev,lines:[],y:L.y,p:L.p};
+      if(el.sub){ const parent=res.elements.find(e=>e.nr===el.nr&&!e.sub); if(parent){ parent.subs=parent.subs||[]; parent.subs.push(el); cur=el; continue; } }
+      res.elements.push(el); cur=el; continue;
+    }
+    if(cur) cur.lines.push(L);
+  }
+  res.elements.forEach(e=>Object.assign(e,describe(e)));
+  return res;
+}
+function fieldVals(e,label){
+  const out=[]; const ls=e.lines;
+  for(let i=0;i<ls.length;i++){ const L=ls[i];
+    if(L.label.replace(/\s+/g," ").startsWith(label) && L.right){ let v=L.right;
+      const n=ls[i+1]; if(n&&n.p===L.p&&n.y-L.y<12&&!n.label&&n.right&&/^[a-z(]/.test(n.right)&&!/^\(Aftrekken|^\(Inbegrepen/.test(n.right)) v+=" "+n.right;
+      out.push(v.trim()); } }
+  return out;
+}
+function describe(e){
+  const all=[e,...(e.subs||[])];
+  const vals=lab=>all.flatMap(x=>fieldVals(x,lab));
+  const text=all.flatMap(x=>x.lines.map(l=>l.all)).join("\n");
+  // plaats: eerste losse tekst rechts tussen kop en het eerste label
+  let plaats="";
+  for(const L of e.lines){ if(/Buitenkader|Koppelen|Vleugel|Afmetingen/.test(L.label)) break; if(L.p!==e.p) continue;
+    const r=L.its.filter(i=>i.x>=360&&i.x<520).map(i=>i).sort((a,b)=>a.x-b.x);
+    const s=itemsToLines(r.map(i=>({...i,y:L.y}))).map(l=>l.all).join(" ").trim();
+    if(s && !/^\(|^massa|binnen\)$|Gekoppeld/.test(s)){ plaats=s; break; } }
+  const dim=(vals("Afmetingen")[0]||"").match(/(\d+)\s*mm\s*x\s*(\d+)\s*mm/);
+  let offB=dim?dim[1]:"", offH=dim?dim[2]:"";
+  if(e.subs&&e.subs.length){
+    const ds=e.subs.map(s=>(fieldVals(s,"Afmetingen")[0]||"").match(/(\d+)\s*mm\s*x\s*(\d+)/)).filter(Boolean);
+    const gap=+((text.match(/koppelprofiel\s+\d+\s*\((-?\d+)\)/i)||[])[1]||0);
+    offB=String(ds.reduce((a,d)=>a+ +d[1],0)+Math.abs(gap)*(ds.length-1)); offH=String(Math.max(...ds.map(d=>+d[2])));
+    if(!plaats){ const pl=e.lines.find(l=>l.p===e.p&&!l.label&&l.its.some(i=>i.x>=377&&i.x<420)); if(pl) plaats=pl.right; }
+  }
+  const vleugels=vals("Vleugel"), beslag=vals("Beslag").join(" | ");
+  const isDoor = /^deur$/i.test(e.kop) || /deur/i.test(beslag) || (e.subs||[]).some(s=>/^deur$/i.test(s.kop));
+  let type="", kind=isDoor?"deur":"raam";
+  if(e.subs&&e.subs.length&&isDoor) type = e.subs.length>1 ? "Voordeur + zijlicht(en)" : "Deur";
+  else if(isDoor) type = /dubbel/i.test(beslag) ? (/buiten/i.test(beslag)?"Dubbel buitendraaiend":"Dubbel binnendraaiend") : (/buiten\s*draai/i.test(beslag)?"Enkel buitendraaiend":"Enkel binnendraaiend");
+  else if(/hefschuif/i.test(text)) type="Hefschuifdeur";
+  else if(/schuif/i.test(beslag)||/schuiv/i.test(vleugels.join(" "))) type="Schuifraam";
+  else if(/valraam/i.test(beslag)) type="Valraam";
+  else { const vast=vleugels.filter(v=>/^vast/i.test(v)).length, open=vleugels.length-vast;
+    if(open===0) type="Vast raam";
+    else if(/dubbele vleugels/i.test(vleugels.join(" "))||/dubbel draaikip/i.test(beslag)) type = vast? "Vast + draaikip - 2 vleugels" : "Draaikip - 2 vleugels";
+    else if(vast) type=vleugels.map(v=>/^vast/i.test(v)?"vast":"draaikip").join(" + ").replace(/^./,c=>c.toUpperCase());
+    else type="Draaikip - 1 vleugel"; }
+  const dm=text.match(/(\d{4})\s*Dorpel\s*Uitsteek\s*(\d+)\s*mm/i);
+  const kleurBu=vals("Buitenzijde kleur")[0]||"", kleurBi=vals("Binnenzijde kleur")[0]||"";
+  const bk=vals("Kleur beslag").filter(v=>!/^Standaard/i.test(v)).pop()||"";
+  const kader=vals("Buitenkader")[0]||"";
+  const glas=[]; all.forEach(x=>{ const i=x.lines.findIndex(l=>/Noodzakelijke beglazing/.test(l.all)); if(i>=0){ const g=x.lines[i+1]; if(g) glas.push(g.its.filter(t=>t.x>=255&&t.x<480).map(t=>t.s).join("").replace(/\d\.\d{2}/g," ").replace(/Struture/g,"Structuur").replace(/\s*-\s*$/,"").replace(/\s+/g," ").trim()); } });
+  const notes=[]; if(/Inlooplijst voor rolluikblad/i.test(text)) notes.push("Inlooplijst 3954 boven voor rolluikblad");
+  const sl=text.match(/Slot\s*([A-Za-z][^\n]*?)\s*-\s*(\d)\s*punt/i); if(sl) notes.push(`Slot: ${sl[1].trim()} ${sl[2]}-punt`);
+  return {plaats:cap(plaats),offB,offH,kind,type,dorpel:dm?`${dm[1]} (${dm[2]})`:"",kleurBu,kleurBi,beslagKleur:bk,kader,glas:[...new Set(glas)].join(" · "),notes};
+}
+async function readOffertePdf(file){
+  const buf=new Uint8Array(await file.arrayBuffer());
+  if(String.fromCharCode(...buf.subarray(0,5))!=="%PDF-") throw new Error("geen pdf");
+  const {items,pages}=await pdfTextItems(buf);
+  if(!items.length) throw new Error("geen tekst");
+  const res=parseOfferte(itemsToLines(items)); res.pages=pages;
+  if(!res.elements.length) throw new Error("geen elementen");
+  return res;
+}
+function offerteToWerf(res, target){
+  const w=target||newWerf();
+  w.klant=w.klant||res.klant; w.offerte=w.offerte||res.offerte; w.klantnr=res.klantnr;
+  w.systeem=cap(res.systeem)||w.systeem; const e0=res.elements[0]||{};
+  w.kleurBu=w.kleurBu||e0.kleurBu||res.kleur; w.kleurBi=w.kleurBi||e0.kleurBi||"";
+  if(!w.beslag) w.beslag=(res.elements.find(e=>e.beslagKleur)||{}).beslagKleur||"";
+  const onlyEmpty = w.posities.length===1 && !w.posities[0].plaats && !w.posities[0].pmB && !w.posities[0].dm.b[0];
+  if(onlyEmpty) w.posities=[];
+  for(const e of res.elements){
+    for(let k=1;k<=e.hoev;k++){
+      const p=newPos(e.kind, e.hoev>1?`${e.nr}.${k}`:e.nr);
+      Object.assign(p,{plaats:e.plaats,type:e.type,offB:e.offB,offH:e.offH,
+        off:{element:e.nr,kader:e.kader,kleurBu:e.kleurBu,kleurBi:e.kleurBi,beslagKleur:e.beslagKleur,glas:e.glas,dorpel:e.dorpel,notes:e.notes}});
+      if(e.dorpel && e.kind==="raam") p.dorpel=e.dorpel;
+      w.posities.push(p);
+    }
+  }
+  return w;
+}
+function offPanel(p){
+  const o=p.off; if(!o) return "";
+  const r=(l,v)=>v?`<div class="offr"><span>${l}</span><b>${esc(v)}</b></div>`:"";
+  return `<div class="panel offpanel"><h3>Volgens offerte · element ${esc(o.element)}</h3>
+    ${r("Profiel / kader",o.kader)}${r("Kleur buiten",o.kleurBu)}${r("Kleur binnen",o.kleurBi)}${r("Beslag",o.beslagKleur)}${r("Dorpel",o.dorpel)}${r("Glas",o.glas)}
+    ${(o.notes||[]).map(n=>`<div class="offr"><span>Let op</span><b>${esc(n)}</b></div>`).join("")}</div>`;
+}
+
 /* ---------- acties ---------- */
 async function openWerf(id){
   const w=await get("werf:"+id); if(!w){ toast("Deze werf werd niet gevonden op deze tablet."); return; }
@@ -709,6 +899,7 @@ document.addEventListener("click", async e=>{
   if(t.id==="nav-ov"){ view="ov"; render(); return; }
   if(t.id==="newwerf"){ werf=newWerf(); scheduleSave(); view="werf"; render(); return; }
   if(t.id==="importbtn"){ $("#importfile").click(); return; }
+  if(t.id==="offwerf"||t.id==="offload"){ const fi=$("#offin"); fi.dataset.mode=t.id; fi.click(); return; }
   if(ds.open){ openWerf(ds.open); return; }
   if(ds.check!==undefined){ const k=ds.check; werf.check=werf.check.includes(k)?werf.check.filter(x=>x!==k):[...werf.check,k]; t.setAttribute("aria-pressed",werf.check.includes(k)); scheduleSave(); return; }
   if(t.id==="delwerf"){ const c=$("#delconfirm"); if(t.dataset.arm!=="1"){ t.dataset.arm="1"; t.textContent="Tik nogmaals om te verwijderen"; c.textContent="Foto's en maten van deze werf gaan verloren."; return; }
@@ -767,6 +958,18 @@ document.addEventListener("change", async e=>{
     const p=P(); let n=0;
     for(const f of t.files){ try{ const d=await shrink(f); const id=uid(); await put("photo:"+id,d); p.photos.push(id); n++; }catch(err){ toast("Deze foto kon niet gelezen worden."); } }
     t.value=""; scheduleSave(); render(); if(n) toast(n===1?"Foto toegevoegd":n+" foto's toegevoegd");
+  }
+  if(t.id==="offin" && t.files && t.files[0]){
+    const mode=t.dataset.mode; const file=t.files[0]; t.value="";
+    toast("Offerte wordt gelezen…");
+    try{ const res=await readOffertePdf(file);
+      const target = mode==="offload" && werf ? werf : null;
+      werf = offerteToWerf(res, target); if(!target){ werf.datum=new Date().toISOString().slice(0,10); }
+      const n=res.elements.reduce((a,e)=>a+e.hoev,0);
+      curPos=0; step="maten"; view="werf"; scheduleSave(); render();
+      toast(`${n} posities ingeladen uit ${res.offerte||"de offerte"}`);
+    }catch(err){ toast("Deze PDF kon niet als offerte gelezen worden. Gebruik de offerte-PDF uit WinPro."); }
+    return;
   }
   if(t.id==="importfile" && t.files && t.files[0]){
     try{ const j=JSON.parse(await t.files[0].text()); if(!j.werf||!j.werf.posities) throw 0;
