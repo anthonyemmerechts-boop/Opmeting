@@ -69,7 +69,7 @@ input.t:focus,select.t:focus,textarea.t:focus,button:focus-visible{outline:3px s
 .chip .dot.done{background:var(--ok)}
 .chip.add{border-style:dashed;color:var(--accent)}
 /* stappen */
-.steps{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-bottom:14px}
+.steps{display:grid;grid-template-columns:repeat(5,1fr);gap:6px;margin-bottom:14px}
 .steps button{min-height:var(--tap);border:1.5px solid var(--line);background:var(--panel);border-radius:8px;font-family:var(--f-display);
   font-weight:700;font-size:17px;cursor:pointer;padding:0 6px}
 .steps button[aria-current="true"]{border-color:var(--accent);background:var(--accent-soft);color:var(--accent)}
@@ -139,7 +139,11 @@ table.ov tr{cursor:pointer}
 .werflist{display:grid;gap:10px}
 .werfitem{display:flex;justify-content:space-between;align-items:center;gap:12px;min-height:64px;padding:10px 14px;border:1.5px solid var(--line);border-radius:10px;background:var(--panel);cursor:pointer;text-align:left;width:100%}
 .werfitem b{font-family:var(--f-display);font-size:20px}
-@media (max-width:560px){.steps{grid-template-columns:repeat(2,1fr)}.door{grid-template-columns:repeat(2,1fr)}}
+.skwrap{position:relative;width:100%;max-width:max(320px,calc((100dvh - 290px) * 1.3333));margin:0 auto;border:1.5px solid var(--line);border-radius:8px;overflow:hidden;background:#fff;touch-action:none}
+.skwrap canvas{display:block;touch-action:none;cursor:crosshair}
+.sklabel{position:absolute;left:10px;bottom:8px;font-size:12px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:#7A8899;pointer-events:none}
+.seg .sw{display:inline-block;width:14px;height:14px;border-radius:50%;margin-right:6px;vertical-align:-2px;border:1.5px solid rgba(255,255,255,.7)}
+@media (max-width:560px){.steps{grid-template-columns:repeat(3,1fr)}.door{grid-template-columns:repeat(2,1fr)}}
 @media (prefers-reduced-motion:reduce){*{transition:none!important}}
 </style>
 
@@ -186,7 +190,7 @@ function newPos(kind,nr){
     dorpel:"",kruk:"",scharnieren:"",soudage:false,infoprod:"",opties:"",verbrL:"",verbrR:"",acc:[],
     draai:"",slot:"",cilinder:"",paneel:"",
     binnen:"",binnenBr:"",tablet:"",tabletMaat:"",buitendorpel:"",bdD:"",
-    rlType:"",rlB:"",rlH:"",rlBed:"",rlZijde:"",notes:"",photos:[],done:false};
+    rlType:"",rlB:"",rlH:"",rlBed:"",rlZijde:"",notes:"",photos:[],sketch:{items:[]},done:false};
 }
 function newWerf(){
   return {id:uid(),klant:"",offerte:"",adres:"",tel:"",datum:new Date().toISOString().slice(0,10),
@@ -256,7 +260,7 @@ function render(){
   else if(view==="ov") app.innerHTML=vOverzicht();
   else app.innerHTML=vPos();
   renderFoot();
-  if(view==="pos") { updateCalc(); loadPhotos(); }
+  if(view==="pos") { updateCalc(); loadPhotos(); initSketch(); }
   put("last",{werf:werf&&werf.id,pos:curPos,step,view});
 }
 
@@ -304,7 +308,7 @@ function vPos(){
   const p=P();
   const strip = werf.posities.map((x,i)=>`<button type="button" class="chip" data-pos="${i}" aria-current="${i===curPos}"><span class="dot ${x.done?"done":""}"></span>${esc(x.nr||i+1)}${x.kind==="deur"?" D":""}</button>`).join("")
     + `<button type="button" class="chip add" data-addpos="raam">+ raam</button><button type="button" class="chip add" data-addpos="deur">+ deur</button>`;
-  const stepsDef=[["maten","Maten","DM · BM · PM"],["uitv",p.kind==="deur"?"Deur":"Uitvoering",p.kind==="deur"?"draairichting · slot":"dorpel · kruk"],["afw","Afwerking","binnen · rolluik"],["foto","Foto's & nota","bestaande toestand"]];
+  const stepsDef=[["maten","Maten","DM · BM · PM"],["uitv",p.kind==="deur"?"Deur":"Uitvoering",p.kind==="deur"?"draairichting · slot":"dorpel · kruk"],["afw","Afwerking","binnen · rolluik"],["schets","Schets","binnenzicht"],["foto","Foto's & nota","bestaande toestand"]];
   const steps = `<div class="steps">${stepsDef.map(([k,l,s])=>`<button type="button" data-step="${k}" aria-current="${step===k}">${l}<small>${s}</small></button>`).join("")}</div>`;
   const head = `<div class="panel grid" style="grid-template-columns:repeat(auto-fit,minmax(min(100%,130px),1fr));margin-bottom:14px">
     <label class="f">Positie${inp("nr",p.nr,'inputmode="numeric"',"t num")}</label>
@@ -319,7 +323,7 @@ function vPos(){
   <datalist id="dl-verd">${["Kelder","0","1","2","3","Zolder"].map(x=>`<option value="${x}">`).join("")}</datalist>
   <datalist id="dl-gevel">${["Voor","Achter","Zij L","Zij R"].map(x=>`<option value="${x}">`).join("")}</datalist>`;
   let body="";
-  if(step==="maten") body=sMaten(p); else if(step==="uitv") body=sUitv(p); else if(step==="afw") body=sAfw(p); else body=sFoto(p);
+  if(step==="maten") body=sMaten(p); else if(step==="uitv") body=sUitv(p); else if(step==="afw") body=sAfw(p); else if(step==="schets") body=sSchets(p); else body=sFoto(p);
   return `<div class="posstrip">${strip}</div>${steps}${head}${body}`;
 }
 
@@ -440,7 +444,7 @@ function vOverzicht(){
     <div class="row" style="justify-content:space-between;align-items:center"><h2>${done} van ${werf.posities.length} posities klaar</h2>
       <div class="row"><button class="btn primary" type="button" id="mkpdf">PDF bewaren</button><button class="btn" type="button" id="sharepdf">PDF delen</button><button class="btn" type="button" id="mkjson">Reservekopie</button></div></div>
     <div class="panel scroll"><table class="ov"><thead><tr><th>Pos.</th><th>Plaats</th><th>Type</th><th>PM B × H</th><th>Dorpel</th><th>Foto's</th><th>Status</th></tr></thead><tbody>${rows}</tbody></table></div>
-    <p class="muted" style="margin:0">Tik op een positie om ze te openen. De PDF bevat per positie alle maten, keuzes, bestellengtes en foto's.</p>
+    <p class="muted" style="margin:0">Tik op een positie om ze te openen. De PDF bevat per positie alle maten, keuzes, bestellengtes, de schets en de foto's.</p>
   </div>`;
 }
 
@@ -458,6 +462,99 @@ function updateCalc(){
   const p=P(); if(!p) return;
   document.querySelectorAll("[data-calc]").forEach(el=>{ const [k,d]=el.dataset.calc.split("."); const v=minOf(p[k][d]); el.querySelector("span").textContent=v===""?"–":v; });
   const L=lens(p); document.querySelectorAll("[data-len]").forEach(el=>{ const r=L.find(x=>x[0]===el.dataset.len); el.textContent=r&&r[2]!==""?r[2]:"–"; });
+}
+
+/* ---------- schets ---------- */
+const SK = {tool:"pen", color:"#1C2B3A", width:3, drawing:null};
+const SK_COLORS = [["Zwart","#1C2B3A"],["Rood","#C8321E"],["Blauw","#1A5FAD"]];
+function skItems(p){ if(!p.sketch||!Array.isArray(p.sketch.items)) p.sketch={items:[]}; return p.sketch.items; }
+function sSchets(p){
+  const tools=[["pen","Vrij tekenen"],["line","Rechte lijn"],["rect","Rechthoek"],["text","Tekst / maat"]];
+  return `<div class="grid" style="grid-template-columns:minmax(0,1fr)">
+    <div class="panel stack">
+      <div class="row" style="justify-content:space-between;align-items:center;gap:8px">
+        <div class="seg" id="sktools">${tools.map(([k,l])=>`<button type="button" data-sktool="${k}" aria-pressed="${SK.tool===k}">${l}</button>`).join("")}</div>
+        <div class="seg">${SK_COLORS.map(([l,c])=>`<button type="button" data-skcolor="${c}" aria-pressed="${SK.color===c}" aria-label="${l}"><span class="sw" style="background:${c}"></span>${l}</button>`).join("")}</div>
+      </div>
+      <div class="row" style="gap:8px;align-items:center">
+        <div class="seg">${[["Dun",2],["Dik",5]].map(([l,w])=>`<button type="button" data-skwidth="${w}" aria-pressed="${SK.width===w}">${l}</button>`).join("")}</div>
+        <label class="f" id="sktextwrap" style="flex:1;min-width:180px" ${SK.tool==="text"?"":"hidden"}>Tekst om te plaatsen<input class="t" id="sktext" placeholder="bv. 1540 of 'tegel weg'" inputmode="text"></label>
+        <div class="seg" style="margin-left:auto">
+          <button type="button" id="skframe">${p.kind==="deur"?"Deurkader":"Raamkader"} volgens PM</button>
+          <button type="button" id="skundo">Ongedaan maken</button>
+          <button type="button" id="skclear">Alles wissen</button>
+        </div>
+      </div>
+      <div class="skwrap" id="skwrap"><canvas id="skcanvas" aria-label="Schetszone binnenzicht"></canvas>
+        <span class="sklabel">Binnenzicht</span></div>
+      <p class="muted" style="margin:0;font-size:13px">Teken met je vinger of een stylus. Bij <b>Tekst / maat</b> typ je eerst de tekst en tik je daarna op de plek in de schets.</p>
+    </div></div>`;
+}
+function skDraw(ctx,W,H,items,grid){
+  ctx.fillStyle="#FFFFFF"; ctx.fillRect(0,0,W,H);
+  if(grid){ ctx.strokeStyle="#E3E9F2"; ctx.lineWidth=1; const s=W/32;
+    for(let x=s;x<W;x+=s){ ctx.beginPath(); ctx.moveTo(x,0); ctx.lineTo(x,H); ctx.stroke(); }
+    for(let y=s;y<H;y+=s){ ctx.beginPath(); ctx.moveTo(0,y); ctx.lineTo(W,y); ctx.stroke(); } }
+  ctx.lineCap="round"; ctx.lineJoin="round";
+  for(const it of items){
+    const lw=(it.w||3)*W/800; ctx.strokeStyle=it.c; ctx.fillStyle=it.c; ctx.lineWidth=lw;
+    if(it.t==="pen"&&it.pts.length){ ctx.beginPath(); ctx.moveTo(it.pts[0][0]*W,it.pts[0][1]*H);
+      for(const q of it.pts.slice(1)) ctx.lineTo(q[0]*W,q[1]*H); if(it.pts.length===1) ctx.lineTo(it.pts[0][0]*W+0.1,it.pts[0][1]*H); ctx.stroke(); }
+    else if(it.t==="line"){ ctx.beginPath(); ctx.moveTo(it.a[0]*W,it.a[1]*H); ctx.lineTo(it.b[0]*W,it.b[1]*H); ctx.stroke(); }
+    else if(it.t==="rect"){ const x=Math.min(it.a[0],it.b[0])*W, y=Math.min(it.a[1],it.b[1])*H; ctx.strokeRect(x,y,Math.abs(it.b[0]-it.a[0])*W,Math.abs(it.b[1]-it.a[1])*H); }
+    else if(it.t==="text"){ ctx.font=`600 ${Math.round(H*0.05)}px Roboto, Arial, sans-serif`; ctx.textBaseline="middle"; ctx.fillText(it.s,it.x*W,it.y*H); }
+  }
+}
+function skSnap(a,b){ // rechte lijn: bijna horizontaal/verticaal wordt exact
+  const dx=Math.abs(b[0]-a[0]), dy=Math.abs(b[1]-a[1])*0.75;
+  if(dy<dx*0.15) return [b[0],a[1]]; if(dx<dy*0.15) return [a[0],b[1]]; return b;
+}
+function initSketch(){
+  const cv=$("#skcanvas"); if(!cv) return;
+  const wrap=$("#skwrap"); const p=P(); const items=skItems(p);
+  const dpr=window.devicePixelRatio||1;
+  const size=()=>{ const w=wrap.clientWidth, h=Math.round(w*3/4); cv.width=Math.round(w*dpr); cv.height=Math.round(h*dpr); cv.style.width=w+"px"; cv.style.height=h+"px"; redraw(); };
+  const ctx=cv.getContext("2d");
+  const redraw=(extra)=>{ skDraw(ctx,cv.width,cv.height,extra?items.concat([extra]):items,true); };
+  const pos=e=>{ const r=cv.getBoundingClientRect(); return [Math.min(1,Math.max(0,(e.clientX-r.left)/r.width)),Math.min(1,Math.max(0,(e.clientY-r.top)/r.height))]; };
+  let activeId=null;
+  cv.onpointerdown=e=>{
+    if(activeId!==null) return;
+    const pt=pos(e);
+    if(SK.tool==="text"){ const s=($("#sktext")||{}).value||""; if(!s.trim()){ toast("Typ eerst de tekst, tik dan in de schets."); $("#sktext")&&$("#sktext").focus(); return; }
+      items.push({t:"text",s:s.trim(),x:pt[0],y:pt[1],c:SK.color}); $("#sktext").value=""; redraw(); scheduleSave(); return; }
+    activeId=e.pointerId; try{ cv.setPointerCapture(e.pointerId); }catch(err){}
+    SK.drawing = SK.tool==="pen" ? {t:"pen",pts:[pt],c:SK.color,w:SK.width} : {t:SK.tool,a:pt,b:pt,c:SK.color,w:SK.width};
+    redraw(SK.drawing); e.preventDefault();
+  };
+  cv.onpointermove=e=>{
+    if(e.pointerId!==activeId||!SK.drawing) return;
+    const evs=e.getCoalescedEvents?e.getCoalescedEvents():[e];
+    if(SK.drawing.t==="pen") for(const ev of evs) SK.drawing.pts.push(pos(ev));
+    else SK.drawing.b = SK.drawing.t==="line" ? skSnap(SK.drawing.a,pos(e)) : pos(e);
+    redraw(SK.drawing); e.preventDefault();
+  };
+  const end=e=>{ if(e.pointerId!==activeId) return; activeId=null;
+    if(SK.drawing){ const d=SK.drawing; SK.drawing=null;
+      const tiny = d.t!=="pen" && Math.abs(d.a[0]-d.b[0])<0.005 && Math.abs(d.a[1]-d.b[1])<0.005;
+      if(!tiny){ if(d.t==="pen") d.pts=d.pts.map(q=>[+q[0].toFixed(4),+q[1].toFixed(4)]); items.push(d); scheduleSave(); } redraw(); } };
+  cv.onpointerup=end; cv.onpointercancel=end;
+  size();
+  if(window.ResizeObserver){ if(initSketch._ro) initSketch._ro.disconnect(); initSketch._ro=new ResizeObserver(()=>{ if(cv.isConnected) size(); }); initSketch._ro.observe(wrap); }
+}
+function skFrame(p){
+  const B=num(p.pmB)||num(p.offB), H=num(p.pmH)||num(p.offH);
+  const r=(B>0&&H>0)?B/H:0.8;            // werkelijke verhouding breedte/hoogte
+  let h=0.8, w=r*h*0.75;                  // canvas is 4:3
+  if(w>0.85){ w=0.85; h=w/(r*0.75); }
+  const x=(1-w)/2, y=(1-h)/2;
+  skItems(p).push({t:"rect",a:[x,y],b:[x+w,y+h],c:"#1C2B3A",w:5});
+}
+function sketchJpeg(p){
+  const items=skItems(p); if(!items.length) return null;
+  const c=document.createElement("canvas"); c.width=1200; c.height=900;
+  skDraw(c.getContext("2d"),1200,900,items,true);
+  return c.toDataURL("image/jpeg",0.88);
 }
 
 /* ---------- foto's ---------- */
@@ -567,9 +664,11 @@ async function buildPdf(){
     let ny=Math.max(yy,ry)+6;
     const note=[p.opties,p.notes].filter(Boolean).join("\n");
     if(note){ doc.text(10,ny,"Opmerkingen",9.5,true); const t=doc.wrap(note,9.5,270); t.forEach((l,k)=>doc.text(10,ny+5.5+k*4.6,l,9.5)); ny+=7+t.length*4.6; }
-    let px=10; const py=Math.min(ny+2,150);
+    let px=10; const py=Math.min(ny+2,130);
+    const skd=sketchJpeg(p);
+    if(skd){ const h=Math.min(200-py,66), w=h*4/3; doc.image(dataUrlBytes(skd),1200,900,px,py,w,h); doc.line(px,py,px+w,py,[200,200,200]); doc.line(px,py+h,px+w,py+h,[200,200,200]); doc.line(px,py,px,py+h,[200,200,200]); doc.line(px+w,py,px+w,py+h,[200,200,200]); px+=w+6; }
     for(const id of p.photos.slice(0,4)){ const d=await get("photo:"+id); if(!d) continue; const sz=await imgSize(d); if(!sz) continue;
-      const h=Math.min(200-py,48), w=h*sz[0]/sz[1]; if(px+w>287) break; doc.image(dataUrlBytes(d),sz[0],sz[1],px,py,w,h); px+=w+4; }
+      const h=Math.min(200-py,skd?66:48), w=h*sz[0]/sz[1]; if(px+w>287) break; doc.image(dataUrlBytes(d),sz[0],sz[1],px,py,w,h); px+=w+4; }
     doc.text(10,203,"Opmeter: Anthony Emmerechts    ·    Paraaf klant: ____________________",8,false,grey);
   }
   return doc.output();
@@ -618,6 +717,13 @@ document.addEventListener("click", async e=>{
   if(!werf) return;
   const p=P();
   if(ds.pos!==undefined){ curPos=+ds.pos; render(); return; }
+  if(ds.sktool){ SK.tool=ds.sktool; document.querySelectorAll("[data-sktool]").forEach(b=>b.setAttribute("aria-pressed",b===t)); const tw=$("#sktextwrap"); if(tw){ tw.hidden=SK.tool!=="text"; if(SK.tool==="text") $("#sktext").focus(); } return; }
+  if(ds.skcolor){ SK.color=ds.skcolor; document.querySelectorAll("[data-skcolor]").forEach(b=>b.setAttribute("aria-pressed",b===t)); return; }
+  if(ds.skwidth){ SK.width=+ds.skwidth; document.querySelectorAll("[data-skwidth]").forEach(b=>b.setAttribute("aria-pressed",b===t)); return; }
+  if(t.id==="skundo"){ const it=skItems(p); if(it.length){ it.pop(); scheduleSave(); initSketch(); } else toast("Niets om ongedaan te maken"); return; }
+  if(t.id==="skframe"){ skFrame(p); scheduleSave(); initSketch(); return; }
+  if(t.id==="skclear"){ if(t.dataset.arm!=="1"){ t.dataset.arm="1"; t.textContent="Tik nogmaals om te wissen"; setTimeout(()=>{ if(t.isConnected){ t.dataset.arm=""; t.textContent="Alles wissen"; } },3000); return; }
+    p.sketch={items:[]}; scheduleSave(); render(); toast("Schets gewist"); return; }
   if(ds.addpos){ addPos(ds.addpos); return; }
   if(ds.step){ step=ds.step; render(); return; }
   if(ds.gopos!==undefined){ curPos=+ds.gopos; step="maten"; view="pos"; render(); return; }
