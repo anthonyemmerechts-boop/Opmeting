@@ -145,6 +145,11 @@ table.ov tr{cursor:pointer}
 .offr:last-child{border-bottom:0}
 .offr span{color:var(--muted);font-size:13px}
 .offr b{font-weight:600;min-width:0;overflow-wrap:anywhere}
+.offdraw{background:#fff;border-radius:8px;padding:6px;display:flex;justify-content:center}
+.offdraw canvas{display:block;max-width:100%}
+.offcom{background:#fff;border-radius:8px;padding:6px 8px;display:flex;flex-direction:column;gap:4px}
+.offcom span{font-size:12px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:#7A8899}
+.offcom canvas{display:block;max-width:100%}
 .copybar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:12px}
 .chk{border-radius:8px;padding:10px 12px;background:var(--bg);display:flex;flex-direction:column;gap:4px}
 .chk ul{margin:0 0 4px;padding-left:20px}.chk li{margin:2px 0}
@@ -276,7 +281,7 @@ function render(){
   else if(view==="ov") app.innerHTML=vOverzicht();
   else app.innerHTML=vPos();
   renderFoot();
-  if(view==="pos") { updateCalc(); loadPhotos(); initSketch(); }
+  if(view==="pos") { updateCalc(); loadPhotos(); initSketch(); initOffDrawings(); }
   if(view==="ov") initSign();
   put("last",{werf:werf&&werf.id,pos:curPos,step,view});
 }
@@ -366,6 +371,7 @@ function sMaten(p){
       <div class="panel">${mBlock("bm",p)}</div>
     </div>
     <div class="stack">
+      ${offMini(p)}
       <div class="panel stack"><h3>PM · bestelmaat</h3>
         <div class="pm">${inp("pmB",p.pmB,'inputmode="decimal" aria-label="PM breedte"',"t num")}<span class="x">×</span>${inp("pmH",p.pmH,'inputmode="decimal" aria-label="PM hoogte"',"t num")}</div>
         <div class="quick"><button type="button" data-take="dm">= kleinste DM</button><button type="button" data-take="bm">= kleinste BM</button>
@@ -771,12 +777,14 @@ async function buildPdf(){
     (acc.length?acc:["–"]).forEach(t=>{ ry+=5.6; doc.text(160,ry,t,9.5); });
     let ny=Math.max(yy,ry)+6;
     const note=[p.opties,p.notes].filter(Boolean).join("\n");
+    if(o.comment){ const [cd,cw,ch]=offDrawingJpeg(o.comment,1600); const w=Math.min(270,o.comment.w*0.35), h=w*ch/cw; doc.text(10,ny,"Commentaar verkoper (offerte)",9.5,true); doc.image(dataUrlBytes(cd),cw,ch,10,ny+2,w,h); ny+=h+8; }
     if(note){ doc.text(10,ny,"Opmerkingen",9.5,true); const t=doc.wrap(note,9.5,270); t.forEach((l,k)=>doc.text(10,ny+5.5+k*4.6,l,9.5)); ny+=7+t.length*4.6; }
-    let px=10; const py=Math.min(ny+2,130);
+    let px=10; const py=Math.min(ny+4,150);
+    if(o.draw){ const [dd,dw,dh]=offDrawingJpeg(o.draw,700); const h=Math.min(196-py,66), w=h*dw/dh; doc.image(dataUrlBytes(dd),dw,dh,px,py,w,h); doc.text(px,py-1.5,"Offerte",7,false,grey); px+=w+6; }
     const skd=sketchJpeg(p);
-    if(skd){ const h=Math.min(200-py,66), w=h*4/3; doc.image(dataUrlBytes(skd),1200,900,px,py,w,h); doc.line(px,py,px+w,py,[200,200,200]); doc.line(px,py+h,px+w,py+h,[200,200,200]); doc.line(px,py,px,py+h,[200,200,200]); doc.line(px+w,py,px+w,py+h,[200,200,200]); px+=w+6; }
+    if(skd){ const h=Math.min(196-py,66), w=h*4/3; doc.image(dataUrlBytes(skd),1200,900,px,py,w,h); doc.line(px,py,px+w,py,[200,200,200]); doc.line(px,py+h,px+w,py+h,[200,200,200]); doc.line(px,py,px,py+h,[200,200,200]); doc.line(px+w,py,px+w,py+h,[200,200,200]); px+=w+6; }
     for(const id of p.photos.slice(0,4)){ const d=await get("photo:"+id); if(!d) continue; const sz=await imgSize(d); if(!sz) continue;
-      const h=Math.min(200-py,skd?66:48), w=h*sz[0]/sz[1]; if(px+w>287) break; doc.image(dataUrlBytes(d),sz[0],sz[1],px,py,w,h); px+=w+4; }
+      const h=Math.min(196-py,skd?66:48), w=h*sz[0]/sz[1]; if(px+w>287) break; doc.image(dataUrlBytes(d),sz[0],sz[1],px,py,w,h); px+=w+4; }
     doc.text(10,203,"Opmeter: Anthony Emmerechts    ·    Paraaf klant: ____________________",8,false,grey);
   }
   const sg=werf.sign||{};
@@ -809,6 +817,114 @@ async function backupBlob(){
   return new Blob([JSON.stringify({v:1,werf,photos})],{type:"application/json"});
 }
 
+/* ---------- tekening uit de offerte (vectoren uit de PDF) ---------- */
+function mmul(m,n){ return [m[0]*n[0]+m[1]*n[2], m[0]*n[1]+m[1]*n[3], m[2]*n[0]+m[3]*n[2], m[2]*n[1]+m[3]*n[3], m[4]*n[0]+m[5]*n[2]+n[4], m[4]*n[1]+m[5]*n[3]+n[5]]; }
+function mapPt(m,x,y){ return [x*m[0]+y*m[2]+m[4], x*m[1]+y*m[3]+m[5]]; }
+const rgbHex=(r,g,b)=>"#"+[r,g,b].map(v=>Math.max(0,Math.min(255,Math.round(v*255))).toString(16).padStart(2,"0")).join("");
+function parseGraphics(t,pageH){
+  const re=/\((?:\\[\s\S]|[^\\)])*\)|\[|\]|<<|>>|<[0-9A-Fa-f\s]*>|[-+]?\d*\.?\d+|\/[^\s\/\[\]()<>]+|[A-Za-z'"*]+/g;
+  const cmds=[]; let st=[], arr=null, m;
+  let gs={ctm:[1,0,0,1,0,0],sc:"#000000",fc:"#000000",lw:1,dash:[]}; const stack=[];
+  let path=[], cur=null; let tm=[1,0,0,1,0,0], lm=tm, tfs=1;
+  const dev=(x,y)=>{ const p=mapPt(gs.ctm,x,y); return [+p[0].toFixed(2), +(pageH-p[1]).toFixed(2)]; };
+  const scale=()=>Math.sqrt(Math.abs(gs.ctm[0]*gs.ctm[3]-gs.ctm[1]*gs.ctm[2]))||1;
+  const un=s=>{ const x=s.slice(1,-1); let o=""; for(let i=0;i<x.length;i++){ const ch=x[i]; if(ch==="\\"&&i+1<x.length){ const n=x[i+1];
+      if(/[0-7]/.test(n)){ let q=""; let j=i+1; while(j<x.length&&q.length<3&&/[0-7]/.test(x[j])){ q+=x[j]; j++; } o+=winStr([parseInt(q,8)]); i=j-1; } else { o+= "nrtbf".includes(n)?"":n; i++; } } else o+=ch; } return o; };
+  const flush=(stroke,fill,eo)=>{ if(path.length&&(stroke||fill)) cmds.push({t:"p",d:path,s:stroke?gs.sc:null,f:fill?gs.fc:null,lw:+(gs.lw*scale()).toFixed(2),eo:!!eo,dash:gs.dash.map(v=>v*scale())}); path=[]; };
+  while((m=re.exec(t))){
+    const w=m[0];
+    if(w==="["){ arr=[]; continue; } if(w==="]"){ st.push(arr||[]); arr=null; continue; }
+    if(arr){ if(w[0]==="(") arr.push(un(w)); else { const v=parseFloat(w); if(!isNaN(v)) arr.push(v); } continue; }
+    if(w[0]==="("){ st.push(un(w)); continue; }
+    if(w[0]==="<"||w===">>"||w==="<<"){ st.push(""); continue; }
+    if(/^[-+]?\d*\.?\d+$/.test(w)){ st.push(parseFloat(w)); continue; }
+    if(w[0]==="/"){ st.push(w); continue; }
+    const n=k=>st.slice(-k);
+    switch(w){
+      case "q": stack.push(JSON.parse(JSON.stringify(gs))); break;
+      case "Q": if(stack.length) gs=stack.pop(); break;
+      case "cm": gs.ctm=mmul(n(6),gs.ctm); break;
+      case "w": gs.lw=st[st.length-1]; break;
+      case "d": { const a=st[st.length-2]; gs.dash=Array.isArray(a)?a:[]; break; }
+      case "RG": gs.sc=rgbHex(...n(3)); break; case "rg": gs.fc=rgbHex(...n(3)); break;
+      case "G": { const v=st[st.length-1]; gs.sc=rgbHex(v,v,v); break; } case "g": { const v=st[st.length-1]; gs.fc=rgbHex(v,v,v); break; }
+      case "K": { const [c,mm,y,k]=n(4); gs.sc=rgbHex((1-c)*(1-k),(1-mm)*(1-k),(1-y)*(1-k)); break; }
+      case "k": { const [c,mm,y,k]=n(4); gs.fc=rgbHex((1-c)*(1-k),(1-mm)*(1-k),(1-y)*(1-k)); break; }
+      case "SC": case "SCN": { const v=st.filter(x=>typeof x==="number"); if(v.length>=3) gs.sc=rgbHex(...v.slice(-3)); else if(v.length) gs.sc=rgbHex(v[0],v[0],v[0]); break; }
+      case "sc": case "scn": { const v=st.filter(x=>typeof x==="number"); if(v.length>=3) gs.fc=rgbHex(...v.slice(-3)); else if(v.length) gs.fc=rgbHex(v[0],v[0],v[0]); break; }
+      case "m": { const p=dev(...n(2)); path.push(["M",...p]); cur=n(2); break; }
+      case "l": { const p=dev(...n(2)); path.push(["L",...p]); cur=n(2); break; }
+      case "c": { const a=n(6); path.push(["C",...dev(a[0],a[1]),...dev(a[2],a[3]),...dev(a[4],a[5])]); cur=[a[4],a[5]]; break; }
+      case "v": { const a=n(4); const c0=cur||[a[0],a[1]]; path.push(["C",...dev(c0[0],c0[1]),...dev(a[0],a[1]),...dev(a[2],a[3])]); cur=[a[2],a[3]]; break; }
+      case "y": { const a=n(4); path.push(["C",...dev(a[0],a[1]),...dev(a[2],a[3]),...dev(a[2],a[3])]); cur=[a[2],a[3]]; break; }
+      case "h": path.push(["Z"]); break;
+      case "re": { const [x,y,ww,hh]=n(4); path.push(["M",...dev(x,y)],["L",...dev(x+ww,y)],["L",...dev(x+ww,y+hh)],["L",...dev(x,y+hh)],["Z"]); break; }
+      case "S": flush(true,false); break; case "s": path.push(["Z"]); flush(true,false); break;
+      case "f": case "F": flush(false,true); break; case "f*": flush(false,true,true); break;
+      case "B": flush(true,true); break; case "B*": flush(true,true,true); break;
+      case "b": path.push(["Z"]); flush(true,true); break; case "b*": path.push(["Z"]); flush(true,true,true); break;
+      case "n": path=[]; break;
+      case "BT": tm=[1,0,0,1,0,0]; lm=tm; break;
+      case "Tf": tfs=st[st.length-1]||1; break;
+      case "Tm": tm=n(6); lm=tm; break;
+      case "Td": case "TD": { const [tx,ty]=n(2); lm=mmul([1,0,0,1,tx,ty],lm); tm=lm; break; }
+      case "TJ": case "Tj": case "'": {
+        const a=st[st.length-1]; const s=Array.isArray(a)?a.filter(x=>typeof x==="string").join(""):(a||"");
+        if(s.trim()){ const M=mmul(mmul([tfs,0,0,tfs,0,0],tm),gs.ctm);
+          cmds.push({t:"t",s,m:[M[0],-M[1],-M[2],M[3],+M[4].toFixed(2),+(pageH-M[5]).toFixed(2)],c:gs.fc}); }
+        break; }
+    }
+    st=[];
+  }
+  return cmds;
+}
+function bboxOf(c){
+  if(c.t==="t") return [c.m[4],c.m[5]-Math.abs(c.m[3]),c.m[4]+c.s.length*Math.hypot(c.m[0],c.m[1])*0.55,c.m[5]];
+  let x0=1e9,y0=1e9,x1=-1e9,y1=-1e9; for(const s of c.d) for(let i=1;i<s.length;i+=2){ x0=Math.min(x0,s[i]); x1=Math.max(x1,s[i]); y0=Math.min(y0,s[i+1]); y1=Math.max(y1,s[i+1]); }
+  return [x0,y0,x1,y1];
+}
+function cropDrawing(cmds,top,bottom,L=18,R=254){
+  const sel=cmds.filter(c=>{ const b=bboxOf(c); if(!(b[0]>=L-2&&b[2]<=R+2&&b[1]>=top&&b[3]<=bottom)) return false;
+    if(c.t==="p" && c.f && !c.s && (b[2]-b[0])>200) return false;
+    if(c.t==="p" && b[0]>R-25 && (b[2]-b[0])<3 && (b[3]-b[1])>120) return false; return true; });
+  if(!sel.length) return null;
+  let x0=1e9,y0=1e9,x1=-1e9,y1=-1e9; sel.forEach(c=>{ const b=bboxOf(c); x0=Math.min(x0,b[0]); y0=Math.min(y0,b[1]); x1=Math.max(x1,b[2]); y1=Math.max(y1,b[3]); });
+  const pad=4; x0-=pad; y0-=pad; x1+=pad; y1+=pad;
+  const sh=c=>{ if(c.t==="t") return {...c,m:[c.m[0],c.m[1],c.m[2],c.m[3],+(c.m[4]-x0).toFixed(2),+(c.m[5]-y0).toFixed(2)]};
+    return {...c,d:c.d.map(s=>s.map((v,i)=>i===0?v:+(v-(i%2?x0:y0)).toFixed(2)))}; };
+  return {w:+(x1-x0).toFixed(1),h:+(y1-y0).toFixed(1),cmds:sel.map(sh)};
+}
+function drawOff(ctx,dr,W,H,bg){
+  const k=Math.min(W/dr.w,H/dr.h), ox=(W-dr.w*k)/2, oy=(H-dr.h*k)/2;
+  if(bg){ ctx.fillStyle=bg; ctx.fillRect(0,0,W,H); }
+  ctx.save(); ctx.translate(ox,oy); ctx.scale(k,k); ctx.lineCap="butt"; ctx.lineJoin="miter";
+  for(const c of dr.cmds){
+    if(c.t==="p"){ ctx.beginPath(); for(const s of c.d){ if(s[0]==="M") ctx.moveTo(s[1],s[2]); else if(s[0]==="L") ctx.lineTo(s[1],s[2]); else if(s[0]==="C") ctx.bezierCurveTo(s[1],s[2],s[3],s[4],s[5],s[6]); else ctx.closePath(); }
+      if(c.f){ ctx.fillStyle=c.f; ctx.fill(c.eo?"evenodd":"nonzero"); }
+      if(c.s){ ctx.strokeStyle=c.s; ctx.lineWidth=Math.max(c.lw,0.35); ctx.setLineDash(c.dash||[]); ctx.stroke(); ctx.setLineDash([]); } }
+    else { ctx.save(); ctx.transform(c.m[0],c.m[1],c.m[2],c.m[3],c.m[4],c.m[5]); ctx.fillStyle=c.c||"#000"; ctx.font="1px Helvetica, Arial, sans-serif"; ctx.textBaseline="alphabetic"; ctx.fillText(c.s,0,0); ctx.restore(); }
+  }
+  ctx.restore();
+}
+function offDrawingJpeg(dr,pxW){
+  const c=document.createElement("canvas"); c.width=pxW; c.height=Math.round(pxW*dr.h/dr.w);
+  drawOff(c.getContext("2d"),dr,c.width,c.height,"#FFFFFF"); return [c.toDataURL("image/jpeg",0.9),c.width,c.height];
+}
+function initOffDrawings(){
+  document.querySelectorAll("canvas[data-offcom]").forEach(cv=>{
+    const p=werf.posities.find(x=>x.id===cv.dataset.offcom); const dr=p&&p.off&&p.off.comment; if(!dr) return;
+    const dpr=window.devicePixelRatio||1, w=cv.parentElement.clientWidth, h=Math.round(w*dr.h/dr.w);
+    cv.width=Math.round(w*dpr); cv.height=Math.round(h*dpr); cv.style.width=w+"px"; cv.style.height=h+"px";
+    drawOff(cv.getContext("2d"),dr,cv.width,cv.height,"#FFFFFF");
+  });
+  document.querySelectorAll("canvas[data-offdraw]").forEach(cv=>{
+    const p=werf.posities.find(x=>x.id===cv.dataset.offdraw); const dr=p&&p.off&&p.off.draw; if(!dr) return;
+    const dpr=window.devicePixelRatio||1, w=cv.parentElement.clientWidth, h=Math.min(Math.round(w*dr.h/dr.w), 520);
+    cv.width=Math.round(w*dpr); cv.height=Math.round(h*dpr); cv.style.width=w+"px"; cv.style.height=h+"px";
+    drawOff(cv.getContext("2d"),dr,cv.width,cv.height,"#FFFFFF");
+  });
+}
+
 /* ---------- offerte inlezen (WinPro-offerte als PDF) ---------- */
 const WIN_HI = {128:"€",130:"‚",131:"ƒ",132:"„",133:"…",134:"†",135:"‡",136:"ˆ",137:"‰",138:"Š",139:"‹",140:"Œ",142:"Ž",145:"‘",146:"’",147:"“",148:"”",149:"•",150:"–",151:"—",152:"˜",153:"™",154:"š",155:"›",156:"œ",158:"ž",159:"Ÿ"};
 function winStr(codes){ let s=""; for(const c of codes) s+= c>=128&&c<160 ? (WIN_HI[c]||"") : String.fromCharCode(c); return s; }
@@ -825,7 +941,9 @@ function findSeq(buf,seq,from){
 async function pdfTextItems(buf){
   const enc=s=>[...s].map(c=>c.charCodeAt(0));
   const S=enc("stream"), E=enc("endstream");
-  const items=[]; let page=0, pos=0;
+  const items=[]; let page=0, pos=0; const gfx={};
+  const mb=new TextDecoder("latin1").decode(buf.subarray(0,Math.min(buf.length,200000))).match(/MediaBox\s*\[\s*[-\d.]+\s+[-\d.]+\s+[-\d.]+\s+([-\d.]+)/);
+  const pageH=mb?parseFloat(mb[1]):842;
   while(true){
     const i=findSeq(buf,S,pos); if(i<0) break;
     if(i>2 && buf[i-1]===100 && buf[i-2]===110 && buf[i-3]===101){ pos=i+6; continue; } // "endstream"
@@ -838,8 +956,9 @@ async function pdfTextItems(buf){
     const txt=new TextDecoder("latin1").decode(data);
     if(!/\bBT\b/.test(txt) || !/ Tf\b/.test(txt) || !/\b(Tm|Td)\b/.test(txt)) continue;
     page++; parseContent(txt,page,items);
+    try{ gfx[page]=parseGraphics(txt,pageH); }catch(err){ gfx[page]=[]; }
   }
-  return {items,pages:page};
+  return {items,pages:page,gfx};
 }
 function parseContent(t,page,items){
   const re=/\((?:\\[\s\S]|[^\\)])*\)|\[|\]|<[0-9A-Fa-f\s]*>|[-+]?\d*\.?\d+|\/[^\s\/\[\]()<>]+|[A-Za-z'"*]+/g;
@@ -954,14 +1073,31 @@ function describe(e){
   const glas=[]; all.forEach(x=>{ const i=x.lines.findIndex(l=>/Noodzakelijke beglazing/.test(l.all)); if(i>=0){ const g=x.lines[i+1]; if(g) glas.push(g.its.filter(t=>t.x>=255&&t.x<480).map(t=>t.s).join("").replace(/\d\.\d{2}/g," ").replace(/Struture/g,"Structuur").replace(/\s*-\s*$/,"").replace(/\s+/g," ").trim()); } });
   const notes=[]; if(/Inlooplijst voor rolluikblad/i.test(text)) notes.push("Inlooplijst 3954 boven voor rolluikblad");
   const sl=text.match(/Slot\s*([A-Za-z][^\n]*?)\s*-\s*(\d)\s*punt/i); if(sl) notes.push(`Slot: ${sl[1].trim()} ${sl[2]}-punt`);
-  return {plaats:cap(plaats),offB,offH,kind,type,dorpel:dm?`${dm[1]} (${dm[2]})`:"",kleurBu,kleurBi,beslagKleur:bk,kader,glas:[...new Set(glas)].join(" · "),notes};
+  const vl=[...new Set(vleugels.map(v=>v.replace(/^Thermofibra\s+\d+\s*/i,"").replace(/\s+/g," ").trim()))];
+  const vnm=v=>v.replace(/^Thermofibra\s+\d+\s*/i,"").replace(/\s*INFO COULISSES.*$/i,"").replace(/^Vast\s+Single\s+Binnen\s+kader/i,"Vast in kader").trim();
+  return {vleugels:vleugels.map(vnm).join(" + "),
+    beslag:vals("Beslag").map(b=>b.replace(/\s+/g," ")).filter((b,i,a)=>a.indexOf(b)===i).join(" | "),
+    plaats:cap(plaats),offB,offH,kind,type,dorpel:dm?`${dm[1]} (${dm[2]})`:"",kleurBu,kleurBi,beslagKleur:bk,kader,glas:[...new Set(glas)].join(" · "),notes};
 }
 async function readOffertePdf(file){
   const buf=new Uint8Array(await file.arrayBuffer());
   if(String.fromCharCode(...buf.subarray(0,5))!=="%PDF-") throw new Error("geen pdf");
-  const {items,pages}=await pdfTextItems(buf);
+  const {items,pages,gfx}=await pdfTextItems(buf);
   if(!items.length) throw new Error("geen tekst");
-  const res=parseOfferte(itemsToLines(items)); res.pages=pages;
+  const lines=itemsToLines(items);
+  const res=parseOfferte(lines); res.pages=pages;
+  for(const e of res.elements){
+    try{ const pl=lines.filter(l=>l.p===e.p&&l.y>e.y);
+      const stop=pl.find(l=>/Boven:\s*Binnenzicht/.test(l.all)||/^(Gekoppeld element|Element|Deur)\s+\d{3}/i.test(l.left));
+      const pg=gfx[e.p]||[]; let top=e.y+8;
+      const lab=pg.find(c=>c.t==="t"&&c.s.trim()==="Commentaar"&&c.m[5]>e.y&&c.m[5]<e.y+40);
+      const rest=pg.filter(c=>c!==lab);
+      if(lab){ const nums=pg.filter(c=>c.t==="t"&&/^\d/.test(c.s.trim())&&c.m[5]>lab.m[5]+5&&c.m[4]<254);
+        const firstNum=nums.length?Math.min(...nums.map(c=>c.m[5]-Math.abs(c.m[3]))):lab.m[5]+40;
+        if(firstNum-6>lab.m[5]+3) e.comment=cropDrawing(rest,lab.m[5]+1,firstNum-6,18,575);
+        top=firstNum-8; }
+      e.draw=cropDrawing(rest,top,stop?stop.y-6:800);
+    }catch(err){ e.draw=null; } }
   if(!res.elements.length) throw new Error("geen elementen");
   return res;
 }
@@ -977,7 +1113,7 @@ function offerteToWerf(res, target){
     for(let k=1;k<=e.hoev;k++){
       const p=newPos(e.kind, e.hoev>1?`${e.nr}.${k}`:e.nr);
       Object.assign(p,{plaats:e.plaats,type:e.type,offB:e.offB,offH:e.offH,
-        off:{element:e.nr,kader:e.kader,kleurBu:e.kleurBu,kleurBi:e.kleurBi,beslagKleur:e.beslagKleur,glas:e.glas,dorpel:e.dorpel,notes:e.notes}});
+        off:{element:e.nr,draw:e.draw||null,comment:e.comment||null,vleugels:e.vleugels,beslag:e.beslag,kader:e.kader,kleurBu:e.kleurBu,kleurBi:e.kleurBi,beslagKleur:e.beslagKleur,glas:e.glas,dorpel:e.dorpel,notes:e.notes}});
       if(e.dorpel && e.kind==="raam") p.dorpel=e.dorpel;
       w.posities.push(p);
     }
@@ -988,10 +1124,20 @@ function offPanel(p){
   const o=p.off; if(!o) return "";
   const r=(l,v)=>v?`<div class="offr"><span>${l}</span><b>${esc(v)}</b></div>`:"";
   return `<div class="panel offpanel"><h3>Volgens offerte · element ${esc(o.element)}</h3>
-    ${r("Profiel / kader",o.kader)}${r("Kleur buiten",o.kleurBu)}${r("Kleur binnen",o.kleurBi)}${r("Beslag",o.beslagKleur)}${r("Dorpel",o.dorpel)}${r("Glas",o.glas)}
+    ${o.comment?`<div class="offcom"><span>Commentaar verkoper</span><canvas data-offcom="${p.id}" aria-label="Commentaar uit de offerte"></canvas></div>`:""}
+    ${o.draw?`<div class="offdraw"><canvas data-offdraw="${p.id}" aria-label="Tekening uit de offerte"></canvas></div>`:""}
+    ${r("Vleugels",o.vleugels)}${r("Beslag / opening",o.beslag)}${r("Profiel / kader",o.kader)}${r("Kleur buiten",o.kleurBu)}${r("Kleur binnen",o.kleurBi)}${r("Beslag",o.beslagKleur)}${r("Dorpel",o.dorpel)}${r("Glas",o.glas)}
     ${(o.notes||[]).map(n=>`<div class="offr"><span>Let op</span><b>${esc(n)}</b></div>`).join("")}</div>`;
 }
 
+function offMini(p){
+  const o=p.off; if(!o) return "";
+  return `<div class="panel offpanel"><h3>Voorzien in offerte · element ${esc(o.element)}</h3>
+    ${o.comment?`<div class="offcom"><span>Commentaar verkoper</span><canvas data-offcom="${p.id}" aria-label="Commentaar uit de offerte"></canvas></div>`:""}
+    ${o.draw?`<div class="offdraw"><canvas data-offdraw="${p.id}" aria-label="Tekening uit de offerte"></canvas></div>`:""}
+    <div class="offr"><span>Type</span><b>${esc(p.type)}</b></div>${o.vleugels?`<div class="offr"><span>Vleugels</span><b>${esc(o.vleugels)}</b></div>`:""}
+    ${o.beslag?`<div class="offr"><span>Beslag / opening</span><b>${esc(o.beslag)}</b></div>`:""}</div>`;
+}
 /* ---------- acties ---------- */
 async function openWerf(id){
   const w=await get("werf:"+id); if(!w){ toast("Deze werf werd niet gevonden op deze tablet."); return; }
