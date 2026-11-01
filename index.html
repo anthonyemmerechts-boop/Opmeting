@@ -1142,7 +1142,8 @@ function offMini(p){
 }
 /* ---------- automatische back-up naar Google Drive ---------- */
 const GD = {settings:{clientId:"",folderId:"",auto:true,lastError:""}, token:null, exp:0, busy:false, lastTry:0};
-async function loadSettings(){ const s=await get("settings"); if(s) Object.assign(GD.settings,s); }
+const DEFAULT_CLIENT_ID="590711271705-fvd8fhhlr3shgoepga63pn7gvl76m9um.apps.googleusercontent.com";
+async function loadSettings(){ const s=await get("settings"); if(s) Object.assign(GD.settings,s); if(!GD.settings.clientId) GD.settings.clientId=DEFAULT_CLIENT_ID; }
 function saveSettings(){ put("settings",GD.settings); }
 function loadGis(){
   if(window.google&&google.accounts&&google.accounts.oauth2) return Promise.resolve();
