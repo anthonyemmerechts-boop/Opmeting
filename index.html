@@ -267,6 +267,10 @@ function lens(p){
 }
 function getPath(o,path){ return path.split(".").reduce((a,k)=>a==null?a:a[k],o); }
 function setPath(o,path,v){ const ks=path.split("."); const last=ks.pop(); const t=ks.reduce((a,k)=>a[k],o); t[last]=v; }
+document.addEventListener("DOMContentLoaded",()=>{ const w=document.createElement("button"); w.id="bkwarn"; w.type="button"; w.hidden=true;
+  w.style.cssText="position:sticky;top:0;z-index:50;display:block;width:100%;border:0;padding:12px 16px;background:#B3261E;color:#fff;font:600 15px/1.3 inherit;text-align:left;cursor:pointer";
+  w.addEventListener("click",async()=>{ try{ GD.token=null; await getToken(true); GD.settings.lastError=""; await runBackup({interactive:true}); }catch(e){ GD.settings.lastError=e.message||"Aanmelden lukte niet"; saveSettings(); toast("Aanmelden lukte niet: "+GD.settings.lastError); } updateBackupBadge(); });
+  document.body.prepend(w); });
 function toast(msg){ const t=$("#toast"); t.textContent=msg; t.hidden=false; clearTimeout(toast._t); toast._t=setTimeout(()=>t.hidden=true,2600); }
 function P(){ return werf.posities[curPos]; }
 
@@ -1200,7 +1204,17 @@ async function runBackup({interactive=false, pdf=null}={}){
     werf.backup=werf.backup||{};
     const json=await backupBlob();
     werf.backup.fileId=await driveUpload(json,baseName()+" (reservekopie).json","application/json",werf.backup.fileId);
-    if(pdf) werf.backup.pdfId=await driveUpload(pdf,baseName()+".pdf","application/pdf",werf.backup.pdfId);
+    /* leesbare PDF: bij elke manuele back-up, en anders hoogstens om de 5 minuten */
+    let leesbaar=pdf;
+    if(!leesbaar&&(interactive||Date.now()-(werf.backup.pdfAt||0)>300000)){ try{ leesbaar=await buildPdf(); }catch(e){ leesbaar=null; } }
+    if(leesbaar){ werf.backup.pdfId=await driveUpload(leesbaar,baseName()+".pdf","application/pdf",werf.backup.pdfId); werf.backup.pdfAt=Date.now(); }
+    /* dagversie: de eerste back-up van de dag blijft apart bewaard, de laatste 7 blijven staan */
+    const dag=new Date().toISOString().slice(0,10); werf.backup.dagen=werf.backup.dagen||[];
+    if(!werf.backup.dagen.some(x=>x.d===dag)){
+      const id=await driveUpload(json,baseName()+" (versie "+dag+").json","application/json",null);
+      werf.backup.dagen.push({d:dag,id});
+      while(werf.backup.dagen.length>7){ const oud=werf.backup.dagen.shift(); await gfetch("https://www.googleapis.com/drive/v3/files/"+oud.id,{method:"DELETE"}).catch(()=>{}); }
+    }
     werf.backup.at=Date.now(); werf.backupPending=false; GD.settings.lastError=""; saveSettings(); scheduleSave();
     if(interactive||pdf) toast(pdf?"PDF en back-up staan op Google Drive":"Back-up staat op Google Drive");
     return true;
@@ -1225,7 +1239,15 @@ function backupStatusText(){
   if(werf&&werf.backupPending&&!navigator.onLine) return "back-up wacht op internet";
   return "back-up nog niet gemaakt";
 }
-function updateBackupBadge(){ const el=$("#bkstat"); if(el) el.textContent=backupStatusText(); }
+function backupAlarm(){
+  if(!GD.settings.clientId||!werf||!navigator.onLine||GD.busy||!needsBackup()) return false;
+  return !tokenValid()||!!GD.settings.lastError;
+}
+function updateBackupBadge(){
+  const el=$("#bkstat"); if(el) el.textContent=backupStatusText();
+  const w=$("#bkwarn"); if(w){ const a=backupAlarm(); w.hidden=!a; if(a) w.textContent=(GD.settings.lastError?"Back-up mislukt":"Niet aangemeld bij Google Drive")+": deze werf staat niet op Drive. Tik om te bewaren."; }
+}
+setInterval(updateBackupBadge,30000);
 function backupPanel(){
   const s=GD.settings;
   if(!s.clientId) return `<div class="panel stack"><h3>Automatische back-up · Google Drive</h3>

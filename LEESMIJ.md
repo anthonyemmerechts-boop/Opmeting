@@ -56,7 +56,7 @@ Wil je een .apk-bestand (bv. om op meerdere tablets te zetten zonder Chrome-menu
 6. Klik **Maken** en kopieer de **Client-ID** (eindigt op `.apps.googleusercontent.com`).
 7. Open de app, ga naar **Werven**, plak de Client-ID bij *Automatische back-up* en tik **Opslaan** en daarna **Verbinden**. Google vraagt één keer toestemming; omdat de app niet "geverifieerd" is, kies je **Doorgaan**.
 
-De app mag enkel aan bestanden die ze zelf maakt (map *Ve.Ra+ Opmetingen*), niet aan de rest van je Drive. Per werf staat er een reservekopie (.json, met foto's en schetsen) en, zodra je een PDF maakt, ook de PDF.
+De app mag enkel aan bestanden die ze zelf maakt (map *Ve.Ra+ Opmetingen*), niet aan de rest van je Drive. Per werf staat er een reservekopie (.json, met foto's en schetsen), een automatische leesbare PDF, en tot 7 dagversies (.json). Zie je bovenaan een rode balk, dan staat de werf niet op Drive: tik erop om aan te melden en te bewaren.
 
 ## Een nieuwe versie plaatsen
 

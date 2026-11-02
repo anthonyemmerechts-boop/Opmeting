@@ -1,5 +1,5 @@
 /* Ve.Ra+ Werfopmeting - offline cache. Verhoog VERSION bij elke nieuwe versie van de app. */
-const VERSION = "werfopmeting-v9";
+const VERSION = "werfopmeting-v10";
 const FILES = ["./", "index.html", "manifest.webmanifest", "icon-192.png", "icon-512.png", "icon-maskable-512.png"];
 self.addEventListener("install", e => {
   e.waitUntil(caches.open(VERSION).then(c => c.addAll(FILES)).then(() => self.skipWaiting()));
