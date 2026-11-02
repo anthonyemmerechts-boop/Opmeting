@@ -65,3 +65,7 @@ Vervang `index.html` op GitHub door de nieuwe versie en verhoog in `sw.js` het n
 ## Koppelingen
 
 Met **+ koppeling** maak je één opening met meerdere delen, bv. 17A deur + 17B raam. Bovenaan vul je de totalen in, per deel de eigen maten. Je bepaalt de PM zelf. De app controleert of de delen samen het totaal geven, en of raam + muurdeel de hoogte haalt. Elk deel heeft verder de gewone schermen voor uitvoering, afwerking, schets en foto's.
+
+## FENESTRio
+
+In het overzicht staat het blok "FENESTRio · glasdikte". De app rekent zelf geen glasdikte: ze vult het sjabloon `fenestrio-template.xlsx` in. Eén set werfgegevens per werf. Per positie is er één of meer vakken. Bij één vak zonder eigen maten is het zichtbare glas PM min de aftrek (raam of deur). De aftrek geldt voor de breedte en de hoogte. Bij meerdere vakken vul je de maten zelf in. Maten staan in de app in mm en in de Excel in m.

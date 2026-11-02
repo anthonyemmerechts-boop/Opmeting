@@ -287,7 +287,7 @@ function render(){
   else app.innerHTML=vPos();
   renderFoot();
   if(view==="pos") { updateCalc(); loadPhotos(); initSketch(); initOffDrawings(); }
-  if(view==="ov") initSign();
+  if(view==="ov"){ initSign(); fenUpdate(); }
   put("last",{werf:werf&&werf.id,pos:curPos,step,view});
 }
 
@@ -306,7 +306,7 @@ function vWerven(){
     <div class="panel"><h3>Zo werkt het</h3>
       <p style="margin:0;max-width:65ch">Alles wordt op deze tablet bewaard, ook zonder bereik. Meet per positie eerst 3× breedte en dan 3× hoogte: met de DISTO in toetsenbordmodus springt elk volgend getal naar het juiste vak. Maak onder <b>Overzicht</b> een PDF voor productie en klant, of een reservekopie. Bestanden komen in de map Downloads.</p></div>
     <input type="file" id="offin" accept="application/pdf,.pdf" hidden>
-    <div class="row"><button class="btn" type="button" id="importbtn">Reservekopie terugzetten</button><span class="muted" style="align-self:center">App-versie 12</span>
+    <div class="row"><button class="btn" type="button" id="importbtn">Reservekopie terugzetten</button><span class="muted" style="align-self:center">App-versie 13</span>
       <input type="file" id="importfile" accept=".json,application/json" hidden></div>
   </div>`;
 }
@@ -480,6 +480,7 @@ function vOverzicht(){
     <div class="row" style="justify-content:space-between;align-items:center"><h2>${done} van ${werf.posities.length} posities klaar</h2>
       <div class="row"><button class="btn primary" type="button" id="mkpdf">PDF bewaren</button><button class="btn" type="button" id="sharepdf">PDF delen</button><button class="btn" type="button" id="mkjson">Reservekopie</button></div></div>
     <div class="panel scroll"><table class="ov"><thead><tr><th>Pos.</th><th>Plaats</th><th>Type</th><th>PM B × H</th><th>Dorpel</th><th>Foto's</th><th>Status</th></tr></thead><tbody>${rows}</tbody></table></div>
+    ${fenPanel()}
     ${signPanel()}
     <p class="muted" style="margin:0">Tik op een positie om ze te openen. De PDF bevat per positie alle maten, keuzes, bestellengtes, de schets en de foto's.</p>
   </div>`;
@@ -571,6 +572,74 @@ function kMaten(p,extra){
       ${kMaat(p,"h")<hoogste||p.kind==="raam"?`<div class="grid" style="grid-template-columns:repeat(2,minmax(0,1fr))">${fld("muurDM",p.muurDM||"","Muurdeel DM")}${fld("muurBM",p.muurBM||"","Muurdeel BM")}</div>`:""}
       ${p.kind==="deur"?fld("dorpelGevel",p.dorpelGevel||"","Arduindorpel t.o.v. gevelsteen"):""}
     </div>${extra}</div></div>`;
+}
+
+/* ---------- FENESTRio: Excel klaarzetten, de app rekent geen glasdikte ---------- */
+const FEN_TERREIN=["Terreinruwheidscategorie 0","Terreinruwheidscategorie I","Terreinruwheidscategorie II","Terreinruwheidscategorie III","Terreinruwheidscategorie IV"];
+const FEN_GLAS=["Enkele beglazing – uitgegloeid","Enkele beglazing gelaagd – uitgegloeid","Dubbel isolerende beglazing met ‘uitgegloeid glas’ – ‘uitgegloeid glas’","Dubbel isolerende beglazing met ‘uitgegloeid glas’ – ‘gelaagd uitgegloeid glas’","Dubbel isolerende beglazing met ‘gelaagd uitgegloeid glas’ – ‘gelaagd uitgegloeid glas","Driedubbel isolerende beglazing met ‘uitgegloeid glas’ – ‘uitgegloeid glas’ uitgegloeid glas’","Driedubbel isolerende beglazing met ‘uitgegloeid glas’ – ‘uitgegloeid glas’ – ‘gelaagd uitgegloeid glas’","Driedubbel isolerende beglazing met ‘gelaagd uitgegloeid glas’ – ‘uitgegloeid glas’ – ‘gelaagd uitgegloeid glas’"];
+function fen(){ werf.fen=werf.fen||{postcode:(String(werf.adres||"").match(/\b\d{4}\b/)||[""])[0],terrein:"",h:"",b:"",d:"",glas:"",aftrekR:"",aftrekD:""}; return werf.fen; }
+function fenRijen(){
+  const f=fen(), rijen=[];
+  werf.posities.forEach((p,i)=>{ const vak=p.vak&&p.vak.length?p.vak:[{}], af=num(p.kind==="deur"?f.aftrekD:f.aftrekR);
+    vak.forEach((v,j)=>{ const enkel=vak.length===1, B=num(v.b)||(enkel?num(p.pmB)-af:NaN), H=num(v.h)||(enkel?num(p.pmH)-af:NaN);
+      rijen.push({naam:`${p.nr||i+1}${p.plaats?" "+p.plaats:""}`,id:j+1,b:B,h:H,glas:p.fenGlas||f.glas,i,j}); }); });
+  return rijen;
+}
+function fenFouten(){
+  const f=fen(), o=[]; if(!/^\d{4}$/.test(String(f.postcode).trim())) o.push("postcode"); if(!f.terrein) o.push("terreincategorie");
+  [["h","gebouwhoogte"],["b","breedte gevel"],["d","breedte zijgevel"]].forEach(([k,l])=>{ if(!(num(f[k])>0)) o.push(l); });
+  const r=fenRijen(); if(r.some(x=>!x.glas)) o.push("beglazingstype");
+  if(r.some(x=>!(x.b>0)||!(x.h>0))) o.push("zichtbare glasmaat van een vak (aftrek of eigen maat)");
+  return o;
+}
+function fenPanel(){
+  const f=fen(), af=(k,l)=>`<label class="f">${l}<input class="t num" data-fen="${k}" value="${esc(f[k])}" inputmode="decimal"></label>`;
+  const opt=(lijst,v,leeg)=>`<option value="">${leeg}</option>`+lijst.map(x=>`<option ${x===v?"selected":""}>${esc(x)}</option>`).join("");
+  const rij=werf.posities.map((p,i)=>{ const vak=p.vak&&p.vak.length?p.vak:[{}];
+    return `<tr><td><b>${esc(p.nr||i+1)}</b> ${p.kind==="deur"?"D":""}</td><td>${vak.map((v,j)=>`<div class="row" style="gap:6px;flex-wrap:nowrap;margin-bottom:4px"><input class="t num" style="min-width:76px" aria-label="Zichtbare breedte vak ${j+1}" placeholder="B" data-fv="${i}.${j}.b" value="${esc(v.b||"")}" inputmode="decimal"><input class="t num" style="min-width:76px" aria-label="Zichtbare hoogte vak ${j+1}" placeholder="H" data-fv="${i}.${j}.h" value="${esc(v.h||"")}" inputmode="decimal">${vak.length>1?`<button type="button" class="btn" data-fdel="${i}.${j}">×</button>`:""}</div>`).join("")}<button type="button" class="btn" data-fadd="${i}">+ vak</button></td>
+      <td><select class="t" style="min-width:150px" aria-label="Beglazing positie ${esc(p.nr||i+1)}" data-fg="${i}">${opt(FEN_GLAS,p.fenGlas||"","Zoals de werf")}</select></td></tr>`; }).join("");
+  return `<details class="panel"><summary><b>FENESTRio · glasdikte</b> <span class="muted">Excel klaarzetten</span></summary><div class="stack" style="margin-top:10px">
+    <p class="muted" style="margin:0">De app rekent geen glasdikte. Ze vult het sjabloon in, en FENESTRio doet de berekening. Laat B en H leeg om PM min de aftrek te gebruiken. Heeft een positie meerdere vakken, vul dan de maten per vak in.</p>
+    <div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(min(100%,140px),1fr))"><label class="f">Postcode<input class="t num" data-fen="postcode" value="${esc(f.postcode)}" inputmode="numeric"></label>${af("h","Gebouwhoogte h (m)")}${af("b","Breedte gevel b (m)")}${af("d","Breedte zijgevel d (m)")}${af("aftrekR","Aftrek raam, PM → glas (mm)")}${af("aftrekD","Aftrek deur, PM → glas (mm)")}</div>
+    <label class="f">Terreinruwheid<select class="t" data-fen="terrein">${opt(FEN_TERREIN,f.terrein,"Kies")}</select></label>
+    <label class="f">Beglazing van de werf<select class="t" data-fen="glas">${opt(FEN_GLAS,f.glas,"Kies")}</select></label>
+    <div class="scroll"><table class="ov"><thead><tr><th>Pos.</th><th>Zichtbaar glas B × H (mm)</th><th>Beglazing</th></tr></thead><tbody>${rij}</tbody></table></div>
+    <div id="fenfout" class="chk" hidden></div>
+    <div class="row"><button class="btn primary" type="button" id="fenxlsx">Excel voor FENESTRio</button></div></div></details>`;
+}
+function fenUpdate(){ const e=$("#fenfout"); if(!e) return; const o=fenFouten(); e.hidden=!o.length; e.innerHTML=o.length?`<b class="wrn">Nog nodig</b><ul>${o.map(x=>`<li>${esc(x)}</li>`).join("")}</ul>`:""; }
+const crcT=(()=>{ const t=[]; for(let n=0;n<256;n++){ let c=n; for(let k=0;k<8;k++) c=c&1?0xEDB88320^(c>>>1):c>>>1; t[n]=c>>>0; } return t; })();
+function crc32(b){ let c=0xFFFFFFFF; for(let i=0;i<b.length;i++) c=crcT[(c^b[i])&255]^(c>>>8); return (c^0xFFFFFFFF)>>>0; }
+async function unzip(buf){
+  const u=new Uint8Array(buf), d=new DataView(buf); let e=u.length-22; while(e>=0&&d.getUint32(e,true)!==0x06054b50) e--;
+  const n=d.getUint16(e+10,true); let p=d.getUint32(e+16,true); const out=[];
+  for(let i=0;i<n;i++){ const m=d.getUint16(p+10,true), cs=d.getUint32(p+20,true), nl=d.getUint16(p+28,true), xl=d.getUint16(p+30,true), cl=d.getUint16(p+32,true), lo=d.getUint32(p+42,true);
+    const name=new TextDecoder().decode(u.subarray(p+46,p+46+nl)), st=lo+30+d.getUint16(lo+26,true)+d.getUint16(lo+28,true), raw=u.subarray(st,st+cs);
+    const data=m===0?raw:new Uint8Array(await new Response(new Blob([raw]).stream().pipeThrough(new DecompressionStream("deflate-raw"))).arrayBuffer());
+    out.push({name,data}); p+=46+nl+xl+cl; }
+  return out;
+}
+function zipStore(files){
+  const parts=[], central=[]; let off=0;
+  const u16=v=>[v&255,v>>8&255], u32=v=>[v&255,v>>>8&255,v>>>16&255,v>>>24&255];
+  for(const f of files){ const nm=new TextEncoder().encode(f.name), crc=crc32(f.data), len=f.data.length;
+    const head=[...u16(20),...u16(0x0800),...u16(0),...u16(0),...u16(33),...u32(crc),...u32(len),...u32(len),...u16(nm.length),...u16(0)];
+    parts.push(new Uint8Array([...u32(0x04034b50),...head]),nm,f.data);
+    central.push(new Uint8Array([...u32(0x02014b50),...u16(20),...head,...u16(0),...u16(0),...u16(0),...u32(0),...u32(off)]),nm);
+    off+=30+nm.length+len; }
+  const cs=central.reduce((a,b)=>a+b.length,0);
+  return new Blob([...parts,...central,new Uint8Array([...u32(0x06054b50),...u16(0),...u16(0),...u16(files.length),...u16(files.length),...u32(cs),...u32(off),...u16(0)])],{type:"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"});
+}
+const xe=s=>String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+async function fenXlsx(){
+  const r=await fetch("fenestrio-template.xlsx"); if(!r.ok) throw new Error("sjabloon");
+  const files=await unzip(await r.arrayBuffer()), sh=files.find(x=>x.name==="xl/worksheets/sheet1.xml"); const f=fen();
+  const txt=(c,v,s=1)=>`<c r="${c}" s="${s}" t="inlineStr"><is><t xml:space="preserve">${xe(v)}</t></is></c>`, nm=(c,v,s=1)=>`<c r="${c}" s="${s}"><v>${v}</v></c>`;
+  const m=v=>Math.round(v)/1000;
+  const rows=fenRijen().map((x,k)=>{ const n=k+2; return `<row r="${n}">${txt("A"+n,x.naam)}${nm("B"+n,x.id)}${nm("C"+n,Number(f.postcode),5)}${txt("D"+n,f.terrein)}${nm("E"+n,num(f.h))}${nm("F"+n,num(f.b))}${nm("G"+n,num(f.d))}${txt("H"+n,x.glas)}${nm("I"+n,m(x.h))}${nm("J"+n,m(x.b))}</row>`; }).join("");
+  const xml=new TextDecoder().decode(sh.data), a=xml.indexOf('<row r="2"'), z=xml.indexOf("</sheetData>");
+  sh.data=new TextEncoder().encode(xml.slice(0,a)+rows+xml.slice(z));
+  return zipStore(files);
 }
 
 /* ---------- controles, draaizijde, overnemen, handtekening ---------- */
@@ -1408,6 +1477,9 @@ document.addEventListener("click", async e=>{
     p.sketch={items:[]}; scheduleSave(); render(); toast("Schets gewist"); return; }
   if(ds.addpos){ addPos(ds.addpos); return; }
   if(t.id==="addkop"){ addKoppeling(); return; }
+  if(ds.fadd!==undefined){ const q=werf.posities[+ds.fadd]; q.vak=q.vak&&q.vak.length?q.vak:[{}]; q.vak.push({}); scheduleSave(); render(); const d=document.querySelector("details.panel"); if(d) d.open=true; return; }
+  if(ds.fdel!==undefined){ const [i,j]=ds.fdel.split("."); werf.posities[+i].vak.splice(+j,1); scheduleSave(); render(); const d=document.querySelector("details.panel"); if(d) d.open=true; return; }
+  if(t.id==="fenxlsx"){ const o=fenFouten(); if(o.length){ toast("Eerst invullen: "+o.join(", ")); return; } try{ saveBlob(await fenXlsx(),fname(" FENESTRio.xlsx")); }catch(err){ toast("Het Excel-bestand kon niet gemaakt worden."); } return; }
   if(ds.kadd){ const k=kOf(p); if(k) kAdd(k,ds.kadd,!!ds.links); return; }
   if(ds.klijn){ const k=kOf(p); if(k){ k.lijn=ds.klijn; scheduleSave(); render(); } return; }
   if(ds.krest){ const k=kOf(p); if(!k) return; const v=kRest(k,p,ds.krest); if(isNaN(v)){ toast("Vul eerst het totaal en de andere delen in"); return; } p[ds.krest].b[0]=String(v); scheduleSave(); render(); return; }
@@ -1446,6 +1518,9 @@ document.addEventListener("input", e=>{
   const t=e.target;
   if((t.id==="signnaam"||t.id==="signdatum") && werf){ werf.sign=Object.assign({},werf.sign,{[t.id==="signnaam"?"naam":"datum"]:t.value}); scheduleSave(); return; }
   if(t.dataset.w!==undefined && werf){ werf[t.dataset.w]=t.value; scheduleSave(); if(t.dataset.w==="klant"||t.dataset.w==="offerte") $("#werfname").textContent=(werf.klant||"Nieuwe werf")+(werf.offerte?" · "+werf.offerte:""); return; }
+  if(t.dataset.fen!==undefined && werf){ fen()[t.dataset.fen]=t.value; scheduleSave(); fenUpdate(); return; }
+  if(t.dataset.fv!==undefined && werf){ const [i,j,k]=t.dataset.fv.split("."); const p=werf.posities[+i]; p.vak=p.vak&&p.vak.length?p.vak:[{}]; p.vak[+j][k]=t.value; scheduleSave(); fenUpdate(); return; }
+  if(t.dataset.fg!==undefined && werf){ werf.posities[+t.dataset.fg].fenGlas=t.value; scheduleSave(); fenUpdate(); return; }
   if(t.dataset.k!==undefined && werf){ const k=kOf(P()); if(k){ setPath(k,t.dataset.k,t.value); scheduleSave(); kLive(); } return; }
   if(t.dataset.p!==undefined && werf){ setPath(P(),t.dataset.p,t.value); scheduleSave(); updateCalc();
     if(t.dataset.p==="nr"){ const chip=document.querySelector(`.chip[data-pos="${curPos}"]`); if(chip) chip.lastChild.textContent=(t.value||curPos+1)+(P().kind==="deur"?" D":""); } }
