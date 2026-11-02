@@ -61,3 +61,7 @@ De app mag enkel aan bestanden die ze zelf maakt (map *Ve.Ra+ Opmetingen*), niet
 ## Een nieuwe versie plaatsen
 
 Vervang `index.html` op GitHub door de nieuwe versie en verhoog in `sw.js` het nummer in `werfopmeting-v1` (bv. naar `v2`). De tablet haalt de nieuwe versie op de volgende keer dat de app met internet geopend wordt.
+
+## Koppelingen
+
+Met **+ koppeling** maak je één opening met meerdere delen, bv. 17A deur + 17B raam. Bovenaan vul je de totalen in, per deel de eigen maten. Je bepaalt de PM zelf. De app controleert of de delen samen het totaal geven, en of raam + muurdeel de hoogte haalt. Elk deel heeft verder de gewone schermen voor uitvoering, afwerking, schets en foto's.

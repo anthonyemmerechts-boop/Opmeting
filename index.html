@@ -306,7 +306,7 @@ function vWerven(){
     <div class="panel"><h3>Zo werkt het</h3>
       <p style="margin:0;max-width:65ch">Alles wordt op deze tablet bewaard, ook zonder bereik. Meet per positie eerst 3× breedte en dan 3× hoogte: met de DISTO in toetsenbordmodus springt elk volgend getal naar het juiste vak. Maak onder <b>Overzicht</b> een PDF voor productie en klant, of een reservekopie. Bestanden komen in de map Downloads.</p></div>
     <input type="file" id="offin" accept="application/pdf,.pdf" hidden>
-    <div class="row"><button class="btn" type="button" id="importbtn">Reservekopie terugzetten</button><span class="muted" style="align-self:center">App-versie 11</span>
+    <div class="row"><button class="btn" type="button" id="importbtn">Reservekopie terugzetten</button><span class="muted" style="align-self:center">App-versie 12</span>
       <input type="file" id="importfile" accept=".json,application/json" hidden></div>
   </div>`;
 }
@@ -337,7 +337,7 @@ function inp(path,val,attrs="",cls="t"){ return `<input class="${cls}" data-p="$
 function vPos(){
   const p=P();
   const strip = werf.posities.map((x,i)=>`<button type="button" class="chip" data-pos="${i}" aria-current="${i===curPos}"><span class="dot ${x.done?"done":""}"></span>${esc(x.nr||i+1)}${x.kind==="deur"?" D":""}</button>`).join("")
-    + `<button type="button" class="chip add" data-addpos="raam">+ raam</button><button type="button" class="chip add" data-addpos="deur">+ deur</button>`;
+    + `<button type="button" class="chip add" data-addpos="raam">+ raam</button><button type="button" class="chip add" data-addpos="deur">+ deur</button><button type="button" class="chip add" id="addkop">+ koppeling</button>`;
   const stepsDef=[["maten","Maten","DM · BM · PM"],["uitv",p.kind==="deur"?"Deur":"Uitvoering",p.kind==="deur"?"draairichting · slot":"dorpel · kruk"],["afw","Afwerking","binnen · rolluik"],["schets","Schets","binnenzicht"],["foto","Foto's & nota","bestaande toestand"]];
   const steps = `<div class="steps">${stepsDef.map(([k,l,s])=>`<button type="button" data-step="${k}" aria-current="${step===k}">${l}<small>${s}</small></button>`).join("")}</div>`;
   const head = `<div class="panel grid" style="grid-template-columns:repeat(auto-fit,minmax(min(100%,130px),1fr));margin-bottom:14px">
@@ -370,7 +370,9 @@ function sMaten(p){
     : `<div class="panel grid" style="grid-template-columns:repeat(auto-fit,minmax(min(100%,150px),1fr))"><h3 style="grid-column:1/-1;margin:0">Deur</h3>
       <label class="f">VD / vloerpas${inp("vd",p.vd,'inputmode="decimal"',"t num")}</label>
       <label class="f">Krukhoogte${inp("krukH",p.krukH,'inputmode="decimal"',"t num")}</label>
+      <label class="f">Arduindorpel t.o.v. gevelsteen${inp("dorpelGevel",p.dorpelGevel||"",'inputmode="decimal"',"t num")}</label>
       <div class="f">Vloer afgewerkt ${seg("vloerAf",["Ja","Nee"],p.vloerAf===true?"Ja":p.vloerAf==="nee"?"Nee":"")}</div></div>`;
+  if(p.koppelId&&kOf(p)) return kMaten(p,pkt.replace(/<label class="f">Arduindorpel[\s\S]*?<\/label>/,""));
   return `<div class="grid cols-2">
     <div class="stack">
       <div class="panel">${mBlock("dm",p)}</div>
@@ -497,7 +499,78 @@ function updateCalc(){
   const p=P(); if(!p) return;
   document.querySelectorAll("[data-calc]").forEach(el=>{ const [k,d]=el.dataset.calc.split("."); const v=minOf(p[k][d]); el.querySelector("span").textContent=v===""?"–":v; });
   const L=lens(p); document.querySelectorAll("[data-len]").forEach(el=>{ const r=L.find(x=>x[0]===el.dataset.len); el.textContent=r&&r[2]!==""?r[2]:"–"; });
-  liveWarn();
+  liveWarn(); kLive();
+}
+
+/* ---------- koppelingen: één opening, meerdere delen ---------- */
+const kOf=p=>(werf.koppelingen||[]).find(k=>k.id===p.koppelId);
+const kDelen=k=>werf.posities.filter(x=>x.koppelId===k.id);
+function kLabel(k){ kDelen(k).forEach((x,i)=>{ x.deel=String.fromCharCode(65+i); x.nr=k.naam+x.deel; }); }
+function addKoppeling(){
+  const n=werf.posities.reduce((a,x)=>Math.max(a,parseInt(x.nr)||0),0)+1;
+  const k={id:uid(),naam:String(n),lijn:"boven",tot:{dmB:"",bmB:"",pmB:"",dmH:"",bmH:"",pmH:""}};
+  werf.koppelingen=[...(werf.koppelingen||[]),k];
+  const a=newPos("deur",n), b=newPos("raam",n); a.koppelId=b.koppelId=k.id;
+  werf.posities.push(a,b); kLabel(k); curPos=werf.posities.indexOf(a); step="maten"; scheduleSave(); render();
+  toast("Koppeling toegevoegd: deur + raam. Voeg delen toe of verwijder er een.");
+}
+function kAdd(k,kind,links){
+  const d=kDelen(k), x=newPos(kind,k.naam); x.koppelId=k.id;
+  const i=werf.posities.indexOf(links?d[0]:d[d.length-1])+(links?0:1);
+  werf.posities.splice(i,0,x); kLabel(k); curPos=werf.posities.indexOf(x); step="maten"; scheduleSave(); render();
+}
+function kMaat(x,w){ return num(w==="b"?x.pmB:x.pmH)||num(x.dm[w][0])||num(w==="b"?x.offB:x.offH)||(w==="b"?1000:(x.kind==="deur"?2100:1200)); }
+function kControles(k){
+  const d=kDelen(k), o=[], t=k.tot;
+  const som=(lab,vals,tot,tol)=>{ const v=vals.map(num); if(v.some(isNaN)||isNaN(num(tot))) return; const s=Math.round(v.reduce((a,b)=>a+b,0)*10)/10, c=Math.round((s-num(tot))*10)/10;
+    o.push({ok:Math.abs(c)<=tol,t:`${lab}: ${v.join(" + ")} = ${s}, totaal ${num(tot)}${c?` (verschil ${c>0?"+":""}${c})`:""}`}); };
+  som("DM breedte",d.map(x=>x.dm.b[0]),t.dmB,3); som("BM breedte",d.map(x=>x.bm.b[0]),t.bmB,3); som("PM breedte",d.map(x=>x.pmB),t.pmB,0);
+  d.forEach(x=>{ if(x.muurDM!==undefined&&x.muurDM!=="") som(`DM hoogte ${x.deel} + muurdeel`,[x.dm.h[0],x.muurDM],t.dmH,3); if(x.muurBM!==undefined&&x.muurBM!=="") som(`BM hoogte ${x.deel} + muurdeel`,[x.bm.h[0],x.muurBM],t.bmH,3); });
+  return o;
+}
+function kSvg(k,cur){
+  const d=kDelen(k), W=d.reduce((a,x)=>a+kMaat(x,"b"),0), H=Math.max(...d.map(x=>kMaat(x,"h")));
+  const vw=640, sc=Math.min((vw-20)/W,300/H), top=26; let x=10+((vw-20)-W*sc)/2;
+  let g=""; d.forEach(p=>{ const w=kMaat(p,"b")*sc, h=kMaat(p,"h")*sc, y=k.lijn==="onder"?top+H*sc-h:top, on=p===cur;
+    g+=`<rect x="${x}" y="${y}" width="${w}" height="${h}" fill="${on?"var(--accent)":"none"}" fill-opacity=".14" stroke="currentColor" stroke-width="${on?3:2}"/>`;
+    g+=`<text x="${x+w/2}" y="${y+h/2-6}" text-anchor="middle" font-size="18" font-weight="700" fill="currentColor">${esc(p.deel)}${p.kind==="deur"?" deur":""}</text>`;
+    g+=`<text x="${x+w/2}" y="${y+h/2+14}" text-anchor="middle" font-size="14" fill="currentColor">${esc(p.pmB||"–")} × ${esc(p.pmH||"–")}</text>`;
+    if(h<H*sc-1){ const my=k.lijn==="onder"?top:y+h; g+=`<rect x="${x}" y="${my}" width="${w}" height="${H*sc-h}" fill="none" stroke="currentColor" stroke-dasharray="5 5" opacity=".5"/><text x="${x+w/2}" y="${my+(H*sc-h)/2+5}" text-anchor="middle" font-size="13" fill="currentColor" opacity=".8">muur ${esc(p.muurDM||"")}</text>`; }
+    x+=w; });
+  return `<svg viewBox="0 0 ${vw} ${top+H*sc+10}" style="width:100%;height:auto;display:block" role="img" aria-label="Schets van de koppeling"><text x="${vw/2}" y="16" text-anchor="middle" font-size="14" fill="currentColor">totaal ${esc(k.tot.pmB||"–")} × ${esc(k.tot.pmH||"–")}</text>${g}</svg>`;
+}
+function kLive(){
+  const el=$("#kplive"); if(!el||!werf) return; const p=P(), k=kOf(p); if(!k) return;
+  const c=kControles(k);
+  el.innerHTML=kSvg(k,p)+(c.length?`<div class="stack" style="gap:4px;margin-top:8px">${c.map(x=>`<div class="${x.ok?"":"lw"}" style="font-size:14px">${x.ok?"✓":"⚠"} ${esc(x.t)}</div>`).join("")}</div>`:`<p class="muted" style="margin:8px 0 0">Vul totalen en delen in: de app controleert of ze kloppen.</p>`);
+  const v=(a,b)=>{ const x=num(a),y=num(b); return isNaN(x)||isNaN(y)?"–":Math.abs(Math.round((x-y)*10)/10); };
+  const b=$("#kbibu"); if(b) b.textContent=v(p.bi,p.bu);
+}
+function kRest(k,p,key){
+  const o=kDelen(k).filter(x=>x!==p).map(x=>num(x[key].b[0]));
+  const t=num(k.tot[key+"B"]); if(isNaN(t)||o.some(isNaN)) return NaN;
+  return Math.round((t-o.reduce((a,b)=>a+b,0))*10)/10;
+}
+function kMaten(p,extra){
+  const k=kOf(p), d=kDelen(k), tv=(f,l)=>`<label class="f">${l}<input class="t num" data-k="tot.${f}" value="${esc(k.tot[f])}" inputmode="decimal" data-m aria-label="Totaal ${l}"></label>`;
+  const fld=(path,val,l)=>`<label class="f">${l}${inp(path,val,'inputmode="decimal" enterkeyhint="next" data-m',"t num")}</label>`;
+  const hoogste=Math.max(...d.map(x=>kMaat(x,"h")));
+  return `<div class="grid cols-2"><div class="stack">
+    <div class="panel stack"><h3>Koppeling ${esc(k.naam)} · totaal</h3>
+      <label class="f">Nummer<input class="t num" data-k="naam" value="${esc(k.naam)}"></label>
+      <div class="grid" style="grid-template-columns:repeat(3,minmax(0,1fr))">${tv("dmB","DM breedte")}${tv("bmB","BM breedte")}${tv("pmB","PM breedte")}${tv("dmH","DM hoogte")}${tv("bmH","BM hoogte")}${tv("pmH","PM hoogte")}</div>
+      <div id="kplive"></div>
+      <div class="seg"><button type="button" data-klijn="boven" aria-pressed="${k.lijn!=="onder"}">Bovenaan gelijk</button><button type="button" data-klijn="onder" aria-pressed="${k.lijn==="onder"}">Onderaan gelijk</button></div>
+      <div class="row"><button type="button" class="btn" data-kadd="raam" data-links="1">+ raam links</button><button type="button" class="btn" data-kadd="raam">+ raam rechts</button><button type="button" class="btn" data-kadd="deur">+ deur rechts</button></div>
+      <p class="muted" style="margin:0">Een deel verwijderen doe je onderaan bij dat deel. Alle maten vul je zelf in: de app stelt niets voor, behalve de rest op jouw vraag.</p>
+    </div></div>
+    <div class="stack"><div class="panel stack"><h3>Deel ${esc(p.deel)} · ${p.kind==="deur"?"deur":"raam"}</h3>
+      <div class="grid" style="grid-template-columns:repeat(2,minmax(0,1fr))">${fld("dm.b.0",p.dm.b[0],"DM breedte")}${fld("dm.h.0",p.dm.h[0],"DM hoogte")}${fld("bm.b.0",p.bm.b[0],"BM breedte")}${fld("bm.h.0",p.bm.h[0],"BM hoogte")}${fld("pmB",p.pmB,"PM breedte")}${fld("pmH",p.pmH,"PM hoogte")}</div>
+      ${d.length>1?`<div class="quick"><button type="button" data-krest="dm">DM breedte = totaal − andere delen</button><button type="button" data-krest="bm">BM breedte = totaal − andere delen</button></div>`:""}
+      <div class="grid" style="grid-template-columns:repeat(3,minmax(0,1fr))">${fld("bi",p.bi,"Bi")}${fld("bu",p.bu,"Bu")}<div class="f">Verschil<div class="calc"><span id="kbibu">–</span></div></div></div>
+      ${kMaat(p,"h")<hoogste||p.kind==="raam"?`<div class="grid" style="grid-template-columns:repeat(2,minmax(0,1fr))">${fld("muurDM",p.muurDM||"","Muurdeel DM")}${fld("muurBM",p.muurBM||"","Muurdeel BM")}</div>`:""}
+      ${p.kind==="deur"?fld("dorpelGevel",p.dorpelGevel||"","Arduindorpel t.o.v. gevelsteen"):""}
+    </div>${extra}</div></div>`;
 }
 
 /* ---------- controles, draaizijde, overnemen, handtekening ---------- */
@@ -764,6 +837,23 @@ async function buildPdf(){
   werf.posities.forEach((p,i)=>{ y+=7; if(y>195){ doc.addPage(); head("Overzicht (vervolg)"); y=26; }
     doc.line(10,y+2,287,y+2); doc.text(10,y,p.nr||i+1,10); doc.text(28,y,p.plaats,10); doc.text(80,y,p.type||p.kind,10);
     doc.text(150,y,p.pmB||p.pmH?`${p.pmB} × ${p.pmH}`:"–",10); doc.text(195,y,p.dorpel,10); doc.text(255,y,p.done?"klaar":"open",10); });
+  for(const k of (werf.koppelingen||[])){
+    const d=kDelen(k); if(!d.length) continue;
+    doc.addPage(); head(`Koppeling ${k.naam}`);
+    const W2=d.reduce((a,x)=>a+kMaat(x,"b"),0), H2=Math.max(...d.map(x=>kMaat(x,"h"))), sc=Math.min(140/W2,120/H2), ty=38; let x=14;
+    doc.text(14,28,`Totaal PM ${k.tot.pmB||"–"} × ${k.tot.pmH||"–"} mm`,11,true);
+    d.forEach(p=>{ const w=kMaat(p,"b")*sc, h=kMaat(p,"h")*sc, y=k.lijn==="onder"?ty+H2*sc-h:ty, ink=[28,43,58];
+      doc.line(x,y,x+w,y,ink,.6); doc.line(x,y+h,x+w,y+h,ink,.6); doc.line(x,y,x,y+h,ink,.6); doc.line(x+w,y,x+w,y+h,ink,.6);
+      doc.text(x+2,y+6,p.deel+(p.kind==="deur"?" deur":" raam"),10,true); doc.text(x+2,y+11,`${p.pmB||"–"} × ${p.pmH||"–"}`,9);
+      if(h<H2*sc-1){ const my=k.lijn==="onder"?ty:y+h; doc.text(x+2,my+6,`muur ${p.muurDM||"–"} / ${p.muurBM||"–"}`,8,false,grey); }
+      x+=w; });
+    let ky=ty+H2*sc+10; [["Deel",14],["DM B × H",32],["BM B × H",68],["PM B × H",104]].forEach(([t,tx])=>doc.text(tx,ky,t,9,true));
+    d.forEach(p=>{ ky+=6; doc.text(14,ky,p.deel,9); doc.text(32,ky,`${p.dm.b[0]||"–"} × ${p.dm.h[0]||"–"}`,9); doc.text(68,ky,`${p.bm.b[0]||"–"} × ${p.bm.h[0]||"–"}`,9); doc.text(104,ky,`${p.pmB||"–"} × ${p.pmH||"–"}`,9); });
+    let cy=38; doc.text(170,cy-6,"Totaal gemeten",10,true); [["DM",k.tot.dmB,k.tot.dmH],["BM",k.tot.bmB,k.tot.bmH],["PM",k.tot.pmB,k.tot.pmH]].forEach(([a,b,h])=>{ doc.text(170,cy,a,9.5,false,grey); doc.text(186,cy,`${b||"–"} × ${h||"–"}`,9.5); cy+=6; });
+    cy+=4; doc.text(170,cy,"Per deel",10,true); d.forEach(p=>{ cy+=6; const v=[p.bi&&`Bi ${p.bi}`,p.bu&&`Bu ${p.bu}`,p.dorpelGevel&&`dorpel ${p.dorpelGevel}`].filter(Boolean).join("  "); doc.text(170,cy,`${p.deel}: ${v||"–"}`,9.5); });
+    cy+=8; doc.text(170,cy,"Controles",10,true); const c=kControles(k); (c.length?c:[{ok:true,t:"Geen controle mogelijk"}]).forEach(r=>{ cy+=5.6; doc.text(170,cy,(r.ok?"OK  ":"LET OP  ")+r.t,7.5,false,r.ok?grey:[179,38,30]); });
+    doc.text(10,203,"Opmeter: Anthony Emmerechts    ·    Paraaf klant: ____________________",8,false,grey);
+  }
   for(const [i,p] of werf.posities.entries()){
     doc.addPage(); head(`Positie ${p.nr||i+1} – ${p.plaats||""} – ${p.type||p.kind}`);
     const m=(k)=>[0,1,2].map(j=>`${p[k].b[j]||"–"} × ${p[k].h[j]||"–"}`).join("    ");
@@ -772,6 +862,8 @@ async function buildPdf(){
       ["A · D · H≠",`${p.a||"–"} · ${p.d||"–"} · ${p.hneq||"–"}`]];
     if(p.kind==="raam") L.push(["Huidige afwerking",`Plakwerk ${p.P.join("")||"–"}   Kassement ${p.K.filter(x=>x!=="TR").join("")||"–"}${p.K.includes("TR")?" + trad. rolluikkast":""}   Tablet/tegels ${p.T.join("")||"–"}`],["vp · krukhoogte",`${p.vp||"–"} · ${p.krukH||"–"}`]);
     else L.push(["Draairichting",p.draai||"–"],["VD · krukhoogte",`${p.vd||"–"} · ${p.krukH||"–"}`],["Slot · cilinder",`${p.slot||"–"} · ${p.cilinder||"–"}`],["Paneel",p.paneel||"–"]);
+    if(p.dorpelGevel) L.push(["Dorpel t.o.v. gevel",`${p.dorpelGevel} mm`]);
+    if(p.koppelId) L.push(["Koppeling",`deel ${p.deel||""} van ${(kOf(p)||{}).naam||""}${p.muurDM||p.muurBM?`, muurdeel ${p.muurDM||"–"} / ${p.muurBM||"–"}`:""}`]);
     L.push(["Verdieping · gevel",`${p.verdieping||"–"} · ${p.gevel||"–"}`]);
     const o=p.off||{}; const R=[["Profiel / kader",o.kader],...(p.kind==="raam"?[["Draaizijde",p.draaizijde]]:[]),["Kleur buiten",o.kleurBu||werf.kleurBu],["Kleur binnen",o.kleurBi||werf.kleurBi],["Dorpel",p.dorpel],["Kruk",p.kruk],["Scharnieren",p.scharnieren],["Soudage inviline",p.soudage?"ja":"nee"],["Info prod",p.infoprod],
       ["Binnenafwerking",[p.binnen,p.binnenBr&&p.binnenBr+" mm"].filter(Boolean).join(", ")],["Tablet",[p.tablet,p.tabletMaat].filter(Boolean).join(", ")],
@@ -1315,6 +1407,10 @@ document.addEventListener("click", async e=>{
   if(t.id==="skclear"){ if(t.dataset.arm!=="1"){ t.dataset.arm="1"; t.textContent="Tik nogmaals om te wissen"; setTimeout(()=>{ if(t.isConnected){ t.dataset.arm=""; t.textContent="Alles wissen"; } },3000); return; }
     p.sketch={items:[]}; scheduleSave(); render(); toast("Schets gewist"); return; }
   if(ds.addpos){ addPos(ds.addpos); return; }
+  if(t.id==="addkop"){ addKoppeling(); return; }
+  if(ds.kadd){ const k=kOf(p); if(k) kAdd(k,ds.kadd,!!ds.links); return; }
+  if(ds.klijn){ const k=kOf(p); if(k){ k.lijn=ds.klijn; scheduleSave(); render(); } return; }
+  if(ds.krest){ const k=kOf(p); if(!k) return; const v=kRest(k,p,ds.krest); if(isNaN(v)){ toast("Vul eerst het totaal en de andere delen in"); return; } p[ds.krest].b[0]=String(v); scheduleSave(); render(); return; }
   if(ds.step){ step=ds.step; render(); return; }
   if(ds.gopos!==undefined){ curPos=+ds.gopos; step="maten"; view="pos"; render(); return; }
   if(t.id==="prevpos"&&curPos>0){ curPos--; render(); window.scrollTo(0,0); autoBackup(true); return; }
@@ -1329,7 +1425,8 @@ document.addEventListener("click", async e=>{
     if(b!=="") p.pmB=String(b); if(h!=="") p.pmH=String(h); document.querySelector('[data-p="pmB"]').value=p.pmB; document.querySelector('[data-p="pmH"]').value=p.pmH; scheduleSave(); return; }
   if(ds.delphoto){ p.photos=p.photos.filter(x=>x!==ds.delphoto); await del("photo:"+ds.delphoto); t.closest(".photo").remove(); scheduleSave(); return; }
   if(t.id==="delpos"){ if(t.dataset.arm!=="1"){ t.dataset.arm="1"; t.textContent="Tik nogmaals om te verwijderen"; return; }
-    for(const id of p.photos) await del("photo:"+id); werf.posities.splice(curPos,1); if(!werf.posities.length) werf.posities.push(newPos("raam",1));
+    for(const id of p.photos) await del("photo:"+id); const dk=kOf(p); werf.posities.splice(curPos,1); if(!werf.posities.length) werf.posities.push(newPos("raam",1));
+    if(dk){ if(kDelen(dk).length) kLabel(dk); else werf.koppelingen=werf.koppelingen.filter(x=>x!==dk); }
     curPos=Math.max(0,curPos-1); scheduleSave(); render(); toast("Positie verwijderd"); return; }
   if(t.id==="mkpdf"||t.id==="sharepdf"){ const lab=t.textContent; t.disabled=true; t.textContent="PDF wordt gemaakt…";
     try{ const blob=await buildPdf(); if(t.id==="mkpdf") saveBlob(blob,fname(".pdf")); else await shareBlob(blob,fname(".pdf")); if(GD.settings.clientId&&GD.settings.auto) runBackup({pdf:blob}); }
@@ -1349,11 +1446,13 @@ document.addEventListener("input", e=>{
   const t=e.target;
   if((t.id==="signnaam"||t.id==="signdatum") && werf){ werf.sign=Object.assign({},werf.sign,{[t.id==="signnaam"?"naam":"datum"]:t.value}); scheduleSave(); return; }
   if(t.dataset.w!==undefined && werf){ werf[t.dataset.w]=t.value; scheduleSave(); if(t.dataset.w==="klant"||t.dataset.w==="offerte") $("#werfname").textContent=(werf.klant||"Nieuwe werf")+(werf.offerte?" · "+werf.offerte:""); return; }
+  if(t.dataset.k!==undefined && werf){ const k=kOf(P()); if(k){ setPath(k,t.dataset.k,t.value); scheduleSave(); kLive(); } return; }
   if(t.dataset.p!==undefined && werf){ setPath(P(),t.dataset.p,t.value); scheduleSave(); updateCalc();
     if(t.dataset.p==="nr"){ const chip=document.querySelector(`.chip[data-pos="${curPos}"]`); if(chip) chip.lastChild.textContent=(t.value||curPos+1)+(P().kind==="deur"?" D":""); } }
 });
 document.addEventListener("change", async e=>{
   const t=e.target;
+  if(t.dataset.k==="naam" && werf){ const k=kOf(P()); if(k){ kLabel(k); scheduleSave(); render(); } return; }
   if(t.id==="photoin" && t.files && werf){
     const p=P(); let n=0;
     for(const f of t.files){ try{ const d=await shrink(f); const id=uid(); await put("photo:"+id,d); p.photos.push(id); n++; }catch(err){ toast("Deze foto kon niet gelezen worden."); } }
